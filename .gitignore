@@ -60,3 +60,9 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+*.pyc
+*.sqlite3
+*~
+*.log
+.tox/*
