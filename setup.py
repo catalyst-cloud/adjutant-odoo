@@ -19,7 +19,7 @@ with open('README.rst') as file:
 
 setup(
     name='stacktask-odoo',
-    version='0.1.1a2',
+    version='0.1.1a3',
     description='A plugin for StackTask with Odoo actions and views.',
     long_description=long_description,
     url='https://github.com/catalyst/stacktask-odoo',

@@ -17,4 +17,4 @@ from stacktask.api.v1.models import register_taskview_class
 
 from odoo_views import views
 
-register_taskview_class(views.OdooContactList)
+register_taskview_class(r'^odoo/contacts/?$', views.OdooContactList)

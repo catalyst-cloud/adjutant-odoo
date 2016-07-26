@@ -20,7 +20,7 @@ from stacktask.api.v1 import tasks
 
 class OdooContactList(tasks.TaskView):
 
-    default_action = 'EditUserRoles'
+    default_actions = ['EditUserRoles', ]
     task_type = 'odoo_contact_create'
 
     def get(self, request):
