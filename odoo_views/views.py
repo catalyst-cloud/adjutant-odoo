@@ -12,30 +12,42 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from django.utils import timezone
+
 from rest_framework.response import Response
 
-from stacktask.api import utils
 from stacktask.api.v1 import tasks
+from stacktask.api.v1.utils import create_notification
 
 
-class OdooContactList(tasks.TaskView):
+class OpenStackSignUp(tasks.TaskView):
 
-    default_actions = ['EditUserRoles', ]
-    task_type = 'odoo_contact_create'
+    default_actions = ['NewClientSignUp', 'NewProjectSignUp']
+    task_type = 'signup'
 
-    def get(self, request):
+    def post(self, request, format=None):
         """
-        """
-        return Response({"error": "Not Implemented."})
+        Unauthenticated endpoint bound primarily to NewClientSignUp
+        and NewProjectSignUp.
 
-    @utils.mod_or_admin
-    def put(self, request):
+        This task requires approval, so this will validate
+        incoming data and create a task to be approved
+        later.
         """
-        """
-        return Response({"error": "Not Implemented."})
+        self.logger.info("(%s) - Starting new OpenStackSignUp task." %
+                         timezone.now())
+        processed = self.process_actions(request)
 
-    @utils.mod_or_admin
-    def delete(self, request):
-        """
-        """
-        return Response({"error": "Not Implemented."})
+        errors = processed.get('errors', None)
+        if errors:
+            self.logger.info("(%s) - Validation errors with task." %
+                             timezone.now())
+            return Response(errors, status=400)
+
+        notes = {
+            'notes':
+                ['New OpenStackSignUp task.']
+        }
+        create_notification(processed['task'], notes)
+        self.logger.info("(%s) - Task created." % timezone.now())
+        return Response({'notes': ['Sign-up submitted.']}, status=200)
