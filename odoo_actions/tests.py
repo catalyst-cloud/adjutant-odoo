@@ -52,6 +52,7 @@ class SignupSerializerTests(TestCase):
             'address_1': "a street",
             'city': 'some city',
             'postal_code': 'NW1',
+            'country': 'nz',
 
         }
         serializer = NewClientSignUpSerializer(data=data)
@@ -66,6 +67,9 @@ class SignupSerializerTests(TestCase):
         self.assertEqual(
             serializer.validated_data['bill_postal_code'],
             data['postal_code'])
+        self.assertEqual(
+            serializer.validated_data['bill_country'],
+            data['country'])
 
     def test_signup_serializer_individual(self):
         """

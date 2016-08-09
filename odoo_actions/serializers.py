@@ -68,6 +68,7 @@ class NewClientSignUpSerializer(serializers.Serializer):
     city = serializers.CharField(max_length=100, required=False)
     region = serializers.CharField(max_length=100, default="")
     postal_code = serializers.CharField(max_length=100, required=False)
+    country = serializers.CharField(max_length=100, required=False)
     payment_method = serializers.ChoiceField(
         choices=['invoice', 'credit_card'], required=False)
 
@@ -80,6 +81,7 @@ class NewClientSignUpSerializer(serializers.Serializer):
     bill_city = serializers.CharField(max_length=100, required=False)
     bill_region = serializers.CharField(max_length=100, required=False)
     bill_postal_code = serializers.CharField(max_length=100, required=False)
+    bill_country = serializers.CharField(max_length=100, required=False)
 
     # both business and individual
     discount_code = serializers.CharField(max_length=100, default="")
@@ -97,6 +99,24 @@ class NewClientSignUpSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     "Payment method required for business signups.")
 
+            try:
+                first_name = data['first_name']
+                last_name = data['last_name']
+                email = data['email']
+                phone = data['phone']
+                address_1 = data['address_1']
+                address_2 = data['address_2']
+                city = data['city']
+                region = data['region']
+                postal_code = data['postal_code']
+                country = data['country']
+
+            # if any of the required primary address fields are missing
+            # we throw a validation error.
+            except KeyError:
+                raise serializers.ValidationError(
+                    "Address info required for business signups.")
+
             bill_first_name = data.get('bill_first_name')
             bill_last_name = data.get('bill_last_name')
             bill_email = data.get('bill_email')
@@ -104,28 +124,23 @@ class NewClientSignUpSerializer(serializers.Serializer):
             bill_address_1 = data.get('bill_address_1')
             bill_city = data.get('bill_city')
             bill_postal_code = data.get('bill_postal_code')
+            bill_country = data.get('bill_country')
 
-            try:
-                # if any of these are not present, we will overwrite all
-                # them with with the primary contact info
-                if not (bill_first_name or bill_last_name or
-                        bill_email or bill_phone or bill_address_1 or
-                        bill_city or bill_postal_code):
-                    data['bill_first_name'] = data['first_name']
-                    data['bill_last_name'] = data['last_name']
-                    data['bill_email'] = data['email']
-                    data['bill_phone'] = data['phone']
-                    data['bill_address_1'] = data['address_1']
-                    data['bill_address_2'] = data['address_2']
-                    data['bill_city'] = data['city']
-                    data['bill_region'] = data['region']
-                    data['bill_postal_code'] = data['postal_code']
-
-            # if any of the required primary address fields are missing
-            # we throw a validation error.
-            except KeyError:
-                raise serializers.ValidationError(
-                    "Address info required for business signups.")
+            # if any of these are not present, we will overwrite all
+            # them with with the primary contact info
+            if not (bill_first_name or bill_last_name or
+                    bill_email or bill_phone or bill_address_1 or
+                    bill_city or bill_postal_code or bill_country):
+                data['bill_first_name'] = first_name
+                data['bill_last_name'] = last_name
+                data['bill_email'] = email
+                data['bill_phone'] = phone
+                data['bill_address_1'] = address_1
+                data['bill_address_2'] = address_2
+                data['bill_city'] = city
+                data['bill_region'] = region
+                data['bill_postal_code'] = postal_code
+                data['bill_country'] = country
 
         return data
 
