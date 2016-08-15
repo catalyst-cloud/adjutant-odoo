@@ -32,10 +32,10 @@ class OdooClient(object):
         self.odoorpc = object()
 
     def do_an_odoo_thing(self):
-        pass
+        return {}
 
-    def do_another_odoo_thing(self):
-        pass
+    def do_another_odoo_thing(self, partner, id):
+        return {}
 
 
 def get_odoo_client():

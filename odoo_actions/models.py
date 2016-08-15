@@ -12,6 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import re
+
 from odoo_actions.odoo_client import get_odoo_client
 
 from stacktask.actions.models import (
@@ -30,7 +32,6 @@ class NewClientSignUp(BaseAction):
         'last_name',
         'email',
         'phone',
-        'domain',
         'discount_code',
     ]
 
@@ -40,7 +41,6 @@ class NewClientSignUp(BaseAction):
         'last_name',
         'email',
         'phone',
-        'domain',
         'company_name',
         'address_1',
         'address_2',
@@ -65,7 +65,7 @@ class NewClientSignUp(BaseAction):
     def __init__(self, data, **kwargs):
         if data['signup_type'] == 'individual':
             self.required = self.individual_required
-        else:
+        elif data['signup_type'] == 'business':
             self.required = self.business_required
         super(NewClientSignUp, self).__init__(data, **kwargs)
 
@@ -74,17 +74,23 @@ class NewClientSignUp(BaseAction):
         if project_name:
             return project_name
 
-        # if domain is present
-            # use tld or tldextract to get domain without subdomains
-            # make project name
-        # else if company name
-            # make project name based on companyname.im
-        # else
-            # make from first+last.im
+        if self.signup_type == "business":
+            # TODO(adriant): Figure out better regex as these are
+            # too restrictive.
+            regex = re.compile('[^0-9a-zA-Z._-]')
 
-        # self.set_cache('project_name', project_name)
+            project_name = "%s.biz" % regex.sub(
+                '', self.company_name.replace(' ', '.'))
+        elif self.signup_type == "individual":
+            # TODO(adriant): same as above.
+            regex = re.compile('[^a-zA-Z]')
+            project_name = "%s.%s.im" % (
+                regex.sub('', self.first_name),
+                regex.sub('', self.last_name))
 
-        return None
+        self.set_cache('project_name', project_name)
+
+        return project_name
 
     def _validate(self):
         # the serializer validates that the data is present and does some
@@ -104,14 +110,14 @@ class NewClientSignUp(BaseAction):
         # for later so this action knows if it should create the new
         # company/contact/etc or not at the post_approve step.
 
-        self.action.valid = False
+        self.action.valid = True
+        self.action.save()
 
     def _pre_approve(self):
         # project_name added to task cache for the follow action
         self.action.task.cache['project_name'] = self._construct_project_name()
 
         self._validate()
-        self.action.save()
 
     def _post_approve(self):
         self.action.task.cache['project_name'] = self._construct_project_name()
@@ -125,7 +131,6 @@ class NewClientSignUp(BaseAction):
         # revalidate to make sure stuff still makes sense for odoo
         self._validate()
         if not self.valid:
-            self.action.save()
             return
 
         # now that someone has approved the task this action
@@ -145,21 +150,21 @@ class NewClientSignUp(BaseAction):
             # we need to set the partner_id to the task cache
             # so it can be used by the NewProject _post_approve
             # step
-            self.action.task.cache['partner_id'] = odoo_resp['partner_id']
+            self.action.task.cache['partner_id'] = odoo_resp.get('partner_id')
             # we also save it to the action cache incase the action runs again
             # both as a flag for completion, and to be able to set it to
             # the task cache again.
-            self.set_cache('partner_id', odoo_resp['partner_id'])
+            self.set_cache('partner_id', odoo_resp.get('partner_id'))
         elif self.action.state == "existing":
             try:
-                odoo_resp = odoo_client.do_another_odoo_thing()
+                odoo_resp = odoo_client.do_an_odoo_thing()
             except Exception as e:
                 self.add_note(
                     "Error: '%s' while setting up partner in Odoo." % e)
                 raise
 
-            self.action.task.cache['partner_id'] = odoo_resp['partner_id']
-            self.set_cache('partner_id', odoo_resp['partner_id'])
+            self.action.task.cache['partner_id'] = odoo_resp.get('partner_id')
+            self.set_cache('partner_id', odoo_resp.get('partner_id'))
 
         self.action.save()
 
@@ -179,11 +184,11 @@ class NewProjectSignUp(NewProject):
         'email',
     ]
 
-    def _validate(self):
+    def _validate_project(self):
         project_name = self.action.task.cache.get('project_name')
         if project_name:
             self.project_name = project_name
-            return super(NewProjectSignUp, self)._validate()
+            return super(NewProjectSignUp, self)._validate_project()
         else:
             self.add_note("No project_name has been set.")
             return False
@@ -192,21 +197,21 @@ class NewProjectSignUp(NewProject):
         # first we run the inherited _post_approve to create the project
         super(NewProjectSignUp, self)._post_approve()
 
-        if self.get_cache('project_linked'):
-            self.add_note("Project already linked in Odoo.")
+        project_linked = self.get_cache('project_linked')
+        user_linked = self.get_cache('user_linked')
+
+        if project_linked and user_linked:
+            self.add_note("Project and user already linked in Odoo.")
             return
 
-        # now that the project exists we get the id
+        # now that the project and user exist we get their ids
         project_id = self.get_cache('project_id')
+        user_id = self.get_cache('user_id')
 
         try:
             partner_id = self.action.task.cache['partner_id']
             # setup the odoo client
             odoo_client = get_odoo_client()
-            odoo_client.do_an_odoo_thing(partner_id, project_id)
-
-            # set a flag to tell us we've linked the project in Odoo.
-            self.set_cache('project_linked', True)
         except KeyError:
             self.add_note(
                 "Error: No partner id. Failed linking project: %s" %
@@ -214,9 +219,32 @@ class NewProjectSignUp(NewProject):
             raise
         except Exception as e:
             self.add_note(
-                "Error: '%s' while linking project: %s in Odoo." %
-                (e, project_id))
+                "Error: '%s' while setting up Odooclient." % e)
             raise
+
+        if not project_linked:
+            try:
+                odoo_client.do_another_odoo_thing(partner_id, project_id)
+
+                # set a flag to tell us we've linked the project in Odoo.
+                self.set_cache('project_linked', True)
+            except Exception as e:
+                self.add_note(
+                    "Error: '%s' while linking project: %s in Odoo." %
+                    (e, project_id))
+                raise
+
+        if not user_linked:
+            try:
+                odoo_client.do_another_odoo_thing(partner_id, user_id)
+
+                # set a flag to tell us we've linked the user in Odoo.
+                self.set_cache('user_linked', True)
+            except Exception as e:
+                self.add_note(
+                    "Error: '%s' while linking user: %s in Odoo." %
+                    (e, user_id))
+                raise
 
 
 register_action_class(NewClientSignUp, NewClientSignUpSerializer)

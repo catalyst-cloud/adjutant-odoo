@@ -1,3 +1,18 @@
+# Copyright (C) 2016 Catalyst IT Ltd
+#
+#    Licensed under the Apache License, Version 2.0 (the "License"); you may
+#    not use this file except in compliance with the License. You may obtain
+#    a copy of the License at
+#
+#         http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+#    License for the specific language governing permissions and limitations
+#    under the License.
+
+
 from stacktask.actions.serializers import BaseUserNameSerializer
 from rest_framework import serializers
 
@@ -16,9 +31,6 @@ class NewClientSignUpSerializer(serializers.Serializer):
     # # if company, should this phone be associated with
     # # the primary contact, or the company?
     # 'phone',  # required
-
-    # # Individual or Company website
-    # 'domain',
 
     # # company details
     # 'company_name',  # required for business
@@ -58,15 +70,14 @@ class NewClientSignUpSerializer(serializers.Serializer):
     # the primary contact, or the company?
     phone = serializers.CharField(max_length=100)
 
-    # Individual or Company website
-    domain = serializers.URLField(default="")
+    toc_agreed = serializers.BooleanField()
 
     # business details
-    company_name = serializers.CharField(max_length=100, default="")
+    company_name = serializers.CharField(max_length=100, required=False)
     address_1 = serializers.CharField(max_length=200, required=False)
-    address_2 = serializers.CharField(max_length=200, default="")
+    address_2 = serializers.CharField(max_length=200, required=False)
     city = serializers.CharField(max_length=100, required=False)
-    region = serializers.CharField(max_length=100, default="")
+    region = serializers.CharField(max_length=100, required=False)
     postal_code = serializers.CharField(max_length=100, required=False)
     country = serializers.CharField(max_length=100, required=False)
     payment_method = serializers.ChoiceField(
@@ -85,7 +96,6 @@ class NewClientSignUpSerializer(serializers.Serializer):
 
     # both business and individual
     discount_code = serializers.CharField(max_length=100, default="")
-    toc_agreed = serializers.BooleanField()
 
     def validate(self, data):
 
@@ -100,14 +110,15 @@ class NewClientSignUpSerializer(serializers.Serializer):
                     "Payment method required for business signups.")
 
             try:
+                company_name = data['company_name']
                 first_name = data['first_name']
                 last_name = data['last_name']
                 email = data['email']
                 phone = data['phone']
                 address_1 = data['address_1']
-                address_2 = data['address_2']
+                address_2 = data.get('address_2')  # Not required
                 city = data['city']
-                region = data['region']
+                region = data.get('region')  # Not required
                 postal_code = data['postal_code']
                 country = data['country']
 
