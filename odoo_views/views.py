@@ -36,13 +36,13 @@ class OpenStackSignUp(tasks.TaskView):
         """
         self.logger.info("(%s) - Starting new OpenStackSignUp task." %
                          timezone.now())
-        processed = self.process_actions(request)
+        processed, status = self.process_actions(request)
 
         errors = processed.get('errors', None)
         if errors:
             self.logger.info("(%s) - Validation errors with task." %
                              timezone.now())
-            return Response(errors, status=400)
+            return Response(errors, status=status)
 
         notes = {
             'notes':

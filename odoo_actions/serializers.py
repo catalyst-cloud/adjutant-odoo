@@ -67,27 +67,31 @@ class NewClientSignUpSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=100)
     toc_agreed = serializers.BooleanField()
     discount_code = serializers.CharField(max_length=100, default="")
+    payment_method = serializers.ChoiceField(
+        choices=['invoice', 'credit_card'], default='credit_card')
 
     # business details
-    company_name = serializers.CharField(max_length=100, required=False)
-    address_1 = serializers.CharField(max_length=200, required=False)
-    address_2 = serializers.CharField(max_length=200, required=False)
-    city = serializers.CharField(max_length=100, required=False)
-    region = serializers.CharField(max_length=100, required=False)
-    postal_code = serializers.CharField(max_length=100, required=False)
-    country = serializers.CharField(max_length=100, required=False)
-    payment_method = serializers.ChoiceField(
-        choices=['invoice', 'credit_card'], required=False)
-    bill_first_name = serializers.CharField(max_length=100, required=False)
-    bill_last_name = serializers.CharField(max_length=100, required=False)
-    bill_email = serializers.EmailField(required=False)
-    bill_phone = serializers.CharField(max_length=100, required=False)
-    bill_address_1 = serializers.CharField(max_length=200, required=False)
-    bill_address_2 = serializers.CharField(max_length=200, required=False)
-    bill_city = serializers.CharField(max_length=100, required=False)
-    bill_region = serializers.CharField(max_length=100, required=False)
-    bill_postal_code = serializers.CharField(max_length=100, required=False)
-    bill_country = serializers.CharField(max_length=100, required=False)
+    company_name = serializers.CharField(max_length=100, default="")
+    address_1 = serializers.CharField(max_length=200, default="")
+    address_2 = serializers.CharField(max_length=200, default="")
+    city = serializers.CharField(max_length=100, default="")
+    region = serializers.CharField(max_length=100, default="")
+    postal_code = serializers.CharField(max_length=100, default="")
+    country = serializers.CharField(max_length=100, default="")
+
+    primary_contact_is_billing = serializers.BooleanField(default=True)
+    bill_first_name = serializers.CharField(max_length=100, default="")
+    bill_last_name = serializers.CharField(max_length=100, default="")
+    bill_email = serializers.EmailField(default="")
+    bill_phone = serializers.CharField(max_length=100, default="")
+
+    primary_address_is_billing = serializers.BooleanField(default=True)
+    bill_address_1 = serializers.CharField(max_length=200, default="")
+    bill_address_2 = serializers.CharField(max_length=200, default="")
+    bill_city = serializers.CharField(max_length=100, default="")
+    bill_region = serializers.CharField(max_length=100, default="")
+    bill_postal_code = serializers.CharField(max_length=100, default="")
+    bill_country = serializers.CharField(max_length=100, default="")
 
     def _check_field(self, errors, field, data):
         value = data.get(field)
@@ -97,10 +101,6 @@ class NewClientSignUpSerializer(serializers.Serializer):
 
     def validate(self, data):
 
-        if not data['toc_agreed']:
-            raise serializers.ValidationError(
-                "Must agree to Terms and Conditions.")
-
         if data['signup_type'] == 'business':
 
             missing_fields = []
@@ -108,49 +108,51 @@ class NewClientSignUpSerializer(serializers.Serializer):
             self._check_field(missing_fields, 'payment_method', data)
             self._check_field(missing_fields, 'company_name', data)
 
-            first_name = self._check_field(missing_fields, 'first_name', data)
-            last_name = self._check_field(missing_fields, 'last_name', data)
-            email = self._check_field(missing_fields, 'email', data)
-            phone = self._check_field(missing_fields, 'phone', data)
-            address_1 = self._check_field(missing_fields, 'address_1', data)
-            address_2 = data.get('address_2')  # Not required
-            data['address_2'] = address_2
-            city = self._check_field(missing_fields, 'city', data)
-            region = data.get('region')  # Not required
-            data['region'] = region
-            postal_code = self._check_field(
+            self._check_field(missing_fields, 'first_name', data)
+            self._check_field(missing_fields, 'last_name', data)
+            self._check_field(missing_fields, 'email', data)
+            self._check_field(missing_fields, 'phone', data)
+            self._check_field(missing_fields, 'address_1', data)
+            data.get('address_2')  # Not required
+            self._check_field(missing_fields, 'city', data)
+            data.get('region')  # Not required
+            self._check_field(
                 missing_fields, 'postal_code', data)
-            country = self._check_field(missing_fields, 'country', data)
+            self._check_field(missing_fields, 'country', data)
+
+            primary_contact_is_billing = data.get('primary_contact_is_billing')
+            primary_address_is_billing = data.get('primary_address_is_billing')
+
+            if not primary_contact_is_billing:
+                self._check_field(
+                    missing_fields, 'bill_first_name', data)
+                self._check_field(
+                    missing_fields, 'bill_last_name', data)
+                self._check_field(
+                    missing_fields, 'bill_email', data)
+                self._check_field(
+                    missing_fields, 'bill_phone', data)
+
+            if not primary_address_is_billing:
+                self._check_field(
+                    missing_fields, 'bill_address_1', data)
+                self._check_field(
+                    missing_fields, 'bill_city', data)
+                self._check_field(
+                    missing_fields, 'bill_region', data)
+                self._check_field(
+                    missing_fields, 'bill_postal_code', data)
+                self._check_field(
+                    missing_fields, 'bill_country', data)
 
             if missing_fields:
                 raise serializers.ValidationError(
                     "These fields are required for businesses: %s" %
                     missing_fields)
 
-            bill_first_name = data.get('bill_first_name')
-            bill_last_name = data.get('bill_last_name')
-            bill_email = data.get('bill_email')
-            bill_phone = data.get('bill_phone')
-            bill_address_1 = data.get('bill_address_1')
-            bill_city = data.get('bill_city')
-            bill_postal_code = data.get('bill_postal_code')
-            bill_country = data.get('bill_country')
-
-            # if any of these are not present, we will overwrite all
-            # them with with the primary contact info
-            if not (bill_first_name or bill_last_name or
-                    bill_email or bill_phone or bill_address_1 or
-                    bill_city or bill_postal_code or bill_country):
-                data['bill_first_name'] = first_name
-                data['bill_last_name'] = last_name
-                data['bill_email'] = email
-                data['bill_phone'] = phone
-                data['bill_address_1'] = address_1
-                data['bill_address_2'] = address_2
-                data['bill_city'] = city
-                data['bill_region'] = region
-                data['bill_postal_code'] = postal_code
-                data['bill_country'] = country
+        if not data['toc_agreed']:
+            raise serializers.ValidationError(
+                "Must agree to Terms and Conditions.")
 
         return data
 

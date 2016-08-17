@@ -33,6 +33,7 @@ class NewClientSignUp(BaseAction):
         'email',
         'phone',
         'discount_code',
+        'payment_method',
     ]
 
     business_required = [
@@ -49,10 +50,12 @@ class NewClientSignUp(BaseAction):
         'postal_code',
         'country',
         'payment_method',
+        'primary_contact_is_billing',
         'bill_first_name',
         'bill_last_name',
         'bill_email',
         'bill_phone',
+        'primary_address_is_billing',
         'bill_address_1',
         'bill_address_2',
         'bill_city',
