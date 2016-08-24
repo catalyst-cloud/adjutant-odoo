@@ -17,16 +17,14 @@ import re
 from odoo_actions.odoo_client import get_odoo_client
 
 from stacktask.actions.models import (
-    BaseAction, register_action_class, NewProject)
+    BaseAction, register_action_class, NewProjectWithUser)
 from serializers import NewClientSignUpSerializer, NewProjectSignUpSerializer
 
 
 class NewClientSignUp(BaseAction):
     """"""
 
-    required = []
-
-    individual_required = [
+    required = [
         'signup_type',
         'first_name',
         'last_name',
@@ -66,9 +64,7 @@ class NewClientSignUp(BaseAction):
     ]
 
     def __init__(self, data, **kwargs):
-        if data['signup_type'] == 'individual':
-            self.required = self.individual_required
-        elif data['signup_type'] == 'business':
+        if data['signup_type'] == 'business':
             self.required = self.business_required
         super(NewClientSignUp, self).__init__(data, **kwargs)
 
@@ -178,13 +174,14 @@ class NewClientSignUp(BaseAction):
         pass
 
 
-class NewProjectSignUp(NewProject):
+class NewProjectSignUp(NewProjectWithUser):
 
     # We get rid of project_name as this action
     # will be getting it from the cache.
     required = [
         'username',
         'email',
+        'parent_id',
     ]
 
     def _validate_project(self):

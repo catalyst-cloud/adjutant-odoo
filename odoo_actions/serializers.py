@@ -19,44 +19,6 @@ from rest_framework import serializers
 
 class NewClientSignUpSerializer(serializers.Serializer):
 
-    # # this is used to double check what fields are required
-    # 'signup_type',
-
-    # # Individual or Primary business contact
-    # 'first_name',  # required
-    # 'last_name',  # required
-    # 'email',  # required
-
-    # # Individual or Company mobile contact
-    # # if company, should this phone be associated with
-    # # the primary contact, or the company?
-    # 'phone',  # required
-
-    # # company details
-    # 'company_name',  # required for business
-    # 'address_1',  # required for business
-    # 'address_2',
-    # 'city',  # required for business
-    # 'region',
-    # 'postal_code',  # required for business
-    # 'payment_method',  # required for business
-
-    # # If any required empty and is business, default to primary contact
-    # 'bill_first_name',  # required in bill contact group
-    # 'bill_last_name',  # required in bill contact group
-    # 'bill_email',  # required in bill contact group
-
-    # # If any required empty and is business, default to company address
-    # 'bill_phone',  # required in bill address group
-    # 'bill_address_1',  # required in bill address group
-    # 'bill_address_2',
-    # 'bill_city',  # required in bill address group
-    # 'bill_region',
-    # 'bill_postal_code',  # required in bill address group
-
-    # # individual or business:
-    # 'discount_code',
-
     signup_type = serializers.ChoiceField(
         choices=['individual', 'business'])
 
@@ -159,4 +121,5 @@ class NewClientSignUpSerializer(serializers.Serializer):
 
 # Extending class just for name clarity.
 class NewProjectSignUpSerializer(BaseUserNameSerializer):
-    pass
+    parent_id = serializers.CharField(
+        max_length=200, default=None, allow_null=True, allow_blank=True)

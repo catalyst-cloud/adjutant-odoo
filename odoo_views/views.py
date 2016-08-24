@@ -12,12 +12,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from django.conf import settings
 from django.utils import timezone
 
 from rest_framework.response import Response
 
 from stacktask.api.v1 import tasks
-from stacktask.api.v1.utils import create_notification
+from stacktask.api.v1.utils import create_notification, add_task_id_for_roles
 
 
 class OpenStackSignUp(tasks.TaskView):
@@ -36,6 +37,16 @@ class OpenStackSignUp(tasks.TaskView):
         """
         self.logger.info("(%s) - Starting new OpenStackSignUp task." %
                          timezone.now())
+
+        class_conf = settings.TASK_SETTINGS.get(self.task_type, {})
+
+        # we need to set the region the resources will be created in:
+        request.data['region'] = class_conf.get('default_region')
+        # Will a default network be setup:
+        request.data['setup_network'] = class_conf.get('setup_network', False)
+        # parent_id for new project, if null defaults to domain:
+        request.data['parent_id'] = class_conf.get('default_parent_id')
+
         processed, status = self.process_actions(request)
 
         errors = processed.get('errors', None)
@@ -50,4 +61,9 @@ class OpenStackSignUp(tasks.TaskView):
         }
         create_notification(processed['task'], notes)
         self.logger.info("(%s) - Task created." % timezone.now())
-        return Response({'notes': ['Sign-up submitted.']}, status=200)
+
+        response_dict = {'notes': ['Sign-up submitted.']}
+
+        add_task_id_for_roles(request, processed, response_dict, ['admin'])
+
+        return Response(response_dict, status=status)
