@@ -44,6 +44,7 @@ You will also need to add some taskview settings for the new signups view:
         default_region: RegionOne
         # If 'None' (null in yaml), will default to domain as parent.
         # If domain isn't set explicity, will service user domain (see KEYSTONE).
+        default_domain_id: default
         default_parent_id: null
         setup_network: True
 

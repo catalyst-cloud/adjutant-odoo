@@ -20,9 +20,9 @@ from rest_framework import serializers
 class NewClientSignUpSerializer(serializers.Serializer):
 
     signup_type = serializers.ChoiceField(
-        choices=['individual', 'business'])
+        choices=['individual', 'organisation'])
 
-    # Indidividual or business
+    # Indidividual or organisation
     first_name = serializers.CharField(max_length=100)
     last_name = serializers.CharField(max_length=100)
     email = serializers.EmailField()
@@ -32,7 +32,7 @@ class NewClientSignUpSerializer(serializers.Serializer):
     payment_method = serializers.ChoiceField(
         choices=['invoice', 'credit_card'], default='credit_card')
 
-    # business details
+    # organisation details
     company_name = serializers.CharField(max_length=100, default="")
     address_1 = serializers.CharField(max_length=200, default="")
     address_2 = serializers.CharField(max_length=200, default="")
@@ -63,7 +63,7 @@ class NewClientSignUpSerializer(serializers.Serializer):
 
     def validate(self, data):
 
-        if data['signup_type'] == 'business':
+        if data['signup_type'] == 'organisation':
 
             missing_fields = []
 
@@ -109,7 +109,7 @@ class NewClientSignUpSerializer(serializers.Serializer):
 
             if missing_fields:
                 raise serializers.ValidationError(
-                    "These fields are required for businesses: %s" %
+                    "These fields are required for organisations: %s" %
                     missing_fields)
 
         if not data['toc_agreed']:
@@ -123,3 +123,5 @@ class NewClientSignUpSerializer(serializers.Serializer):
 class NewProjectSignUpSerializer(BaseUserNameSerializer):
     parent_id = serializers.CharField(
         max_length=200, default=None, allow_null=True, allow_blank=True)
+    signup_type = serializers.ChoiceField(
+        choices=['individual', 'organisation'])

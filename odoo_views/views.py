@@ -44,6 +44,8 @@ class OpenStackSignUp(tasks.TaskView):
         request.data['region'] = class_conf.get('default_region')
         # Will a default network be setup:
         request.data['setup_network'] = class_conf.get('setup_network', False)
+        # domain_id for new project:
+        request.data['domain_id'] = class_conf.get('default_domain_id')
         # parent_id for new project, if null defaults to domain:
         request.data['parent_id'] = class_conf.get('default_parent_id')
 

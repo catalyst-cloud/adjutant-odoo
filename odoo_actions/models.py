@@ -15,10 +15,13 @@
 import re
 
 from odoo_actions.odoo_client import get_odoo_client
+from odoo_actions.utils import generate_short_id
 
 from stacktask.actions.models import (
     BaseAction, register_action_class, NewProjectWithUser)
-from serializers import NewClientSignUpSerializer, NewProjectSignUpSerializer
+from stacktask.actions import user_store
+from odoo_actions.serializers import (
+    NewClientSignUpSerializer, NewProjectSignUpSerializer)
 
 
 class NewClientSignUp(BaseAction):
@@ -34,7 +37,7 @@ class NewClientSignUp(BaseAction):
         'payment_method',
     ]
 
-    business_required = [
+    organisation_required = [
         'signup_type',
         'first_name',
         'last_name',
@@ -64,8 +67,8 @@ class NewClientSignUp(BaseAction):
     ]
 
     def __init__(self, data, **kwargs):
-        if data['signup_type'] == 'business':
-            self.required = self.business_required
+        if data['signup_type'] == 'organisation':
+            self.required = self.organisation_required
         super(NewClientSignUp, self).__init__(data, **kwargs)
 
     def _construct_project_name(self):
@@ -73,19 +76,17 @@ class NewClientSignUp(BaseAction):
         if project_name:
             return project_name
 
-        if self.signup_type == "business":
-            # TODO(adriant): Figure out better regex as these are
+        if self.signup_type == "organisation":
+            # TODO(adriant): Figure out better regex as these may be
             # too restrictive.
             regex = re.compile('[^0-9a-zA-Z._-]')
-
-            project_name = "%s.biz" % regex.sub(
-                '', self.company_name.replace(' ', '.'))
+            project_name = regex.sub('', self.company_name.replace(' ', '-'))
         elif self.signup_type == "individual":
             # TODO(adriant): same as above.
             regex = re.compile('[^a-zA-Z]')
-            project_name = "%s.%s.im" % (
-                regex.sub('', self.first_name),
-                regex.sub('', self.last_name))
+            project_name = "%s-%s" % (
+                regex.sub('', self.first_name.replace(' ', '-')),
+                regex.sub('', self.last_name.replace(' ', '-')))
 
         self.set_cache('project_name', project_name)
 
@@ -179,19 +180,76 @@ class NewProjectSignUp(NewProjectWithUser):
     # We get rid of project_name as this action
     # will be getting it from the cache.
     required = [
+        'signup_type',
         'username',
         'email',
         'parent_id',
+        'domain_id',
     ]
 
     def _validate_project(self):
-        project_name = self.action.task.cache.get('project_name')
-        if project_name:
-            self.project_name = project_name
-            return super(NewProjectSignUp, self)._validate_project()
-        else:
-            self.add_note("No project_name has been set.")
+        id_manager = user_store.IdentityManager()
+
+        domain = id_manager.get_domain(self.domain_id)
+        if not domain:
+            self.add_note('Domain does not exist.')
             return False
+
+        # NOTE(adriant): If parent id is None, Keystone defaults to the domain.
+        # So we only care to validate if parent_id is not None.
+        if self.parent_id:
+            parent = id_manager.get_project(self.parent_id)
+            if not parent:
+                self.add_note("Parent id: '%s' not for an existing project." %
+                              self.project_name)
+                return False
+
+        project_name = self.get_cache('project_name')
+        if not project_name:
+            project_name = self.action.task.cache.get('project_name')
+            if not project_name:
+                self.add_note("No project_name has been set.")
+                return False
+
+            project = id_manager.find_project(project_name, self.domain_id)
+            if project:
+                self.add_note("Existing project with name '%s'." %
+                              project_name)
+                self.add_note("Attempting to find unique project name to use.")
+
+                # NOTE(adriant) Mainly to avoid doing a while True loop, or it
+                # taking too long.
+                name_attempts = 20
+                found_new_name = False
+
+                for i in range(name_attempts):
+                    ran_hash = generate_short_id()
+
+                    project_name = "%s~%s" % (project_name, ran_hash)
+                    project = id_manager.find_project(
+                        project_name, self.domain_id)
+                    if project:
+                        self.add_note(
+                            "Existing project with name '%s'." % project_name)
+                        continue
+
+                    self.project_name = project_name
+                    self.set_cache('project_name', project_name)
+                    self.add_note(
+                        "No existing project with name '%s'." % project_name)
+                    found_new_name = True
+                    break
+
+                if not found_new_name:
+                    return False
+            else:
+                self.project_name = project_name
+                self.set_cache('project_name', project_name)
+                self.add_note(
+                    "No existing project with name '%s'." % project_name)
+
+        self.project_name = project_name
+        return True
 
     def _post_approve(self):
         # first we run the inherited _post_approve to create the project
@@ -207,6 +265,10 @@ class NewProjectSignUp(NewProjectWithUser):
         # now that the project and user exist we get their ids
         project_id = self.get_cache('project_id')
         user_id = self.get_cache('user_id')
+
+        # update the project with metadata:
+        id_manager = user_store.IdentityManager()
+        id_manager.update_project(project_id, signup_type=self.signup_type)
 
         try:
             partner_id = self.action.task.cache['partner_id']
