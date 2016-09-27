@@ -47,6 +47,7 @@ You will also need to add some taskview settings for the new signups view:
         default_domain_id: default
         default_parent_id: null
         setup_network: True
+        auto_acknowledge: True
 
 
 Once active, and if debug is turned on, you can see the endpoint and test it with the browsable django-rest-framework api.

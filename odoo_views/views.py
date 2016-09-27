@@ -61,7 +61,10 @@ class OpenStackSignUp(tasks.TaskView):
             'notes':
                 ['New OpenStackSignUp task.']
         }
-        create_notification(processed['task'], notes)
+        notification = create_notification(processed['task'], notes)
+        if class_conf.get('auto_acknowledge'):
+            notification.acknowledged = True
+            notification.save()
         self.logger.info("(%s) - Task created." % timezone.now())
 
         response_dict = {'notes': ['Sign-up submitted.']}

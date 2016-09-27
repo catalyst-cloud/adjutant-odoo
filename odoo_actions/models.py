@@ -177,7 +177,7 @@ class NewClientSignUp(BaseAction):
 
 class NewProjectSignUp(NewProjectWithUser):
 
-    # We get rid of project_name as this action
+    # project_name is not required as this action
     # will be getting it from the cache.
     required = [
         'signup_type',
@@ -188,22 +188,6 @@ class NewProjectSignUp(NewProjectWithUser):
     ]
 
     def _validate_project(self):
-        id_manager = user_store.IdentityManager()
-
-        domain = id_manager.get_domain(self.domain_id)
-        if not domain:
-            self.add_note('Domain does not exist.')
-            return False
-
-        # NOTE(adriant): If parent id is None, Keystone defaults to the domain.
-        # So we only care to validate if parent_id is not None.
-        if self.parent_id:
-            parent = id_manager.get_project(self.parent_id)
-            if not parent:
-                self.add_note("Parent id: '%s' not for an existing project." %
-                              self.project_name)
-                return False
-
         project_name = self.get_cache('project_name')
         if not project_name:
             project_name = self.action.task.cache.get('project_name')
@@ -211,7 +195,8 @@ class NewProjectSignUp(NewProjectWithUser):
                 self.add_note("No project_name has been set.")
                 return False
 
-            project = id_manager.find_project(project_name, self.domain_id)
+            project = self.id_manager.find_project(
+                project_name, self.domain_id)
             if project:
                 self.add_note("Existing project with name '%s'." %
                               project_name)
@@ -226,7 +211,7 @@ class NewProjectSignUp(NewProjectWithUser):
                     ran_hash = generate_short_id()
 
                     project_name = "%s~%s" % (project_name, ran_hash)
-                    project = id_manager.find_project(
+                    project = self.id_manager.find_project(
                         project_name, self.domain_id)
                     if project:
                         self.add_note(
