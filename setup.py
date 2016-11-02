@@ -14,12 +14,15 @@
 
 from setuptools import setup, find_packages
 
+with open('requirements.txt') as f:
+    required = f.readlines()
+
 with open('README.rst') as file:
     long_description = file.read()
 
 setup(
     name='stacktask-odoo',
-    version='0.1.1a3',
+    version='0.1.1a5',
     description='A plugin for StackTask with Odoo actions and views.',
     long_description=long_description,
     url='https://github.com/catalyst/stacktask-odoo',
@@ -36,4 +39,5 @@ setup(
     ],
     keywords='Odoo erp contacts task stacktask workflow',
     packages=find_packages(),
+    install_requires=required,
 )

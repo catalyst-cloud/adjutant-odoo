@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from odoo_actions.serializers import NewClientSignUpSerializer
+from odoo_actions.serializers import NewClientSignUpActionSerializer
 
 
 class SignupSerializerTests(TestCase):
@@ -15,15 +15,15 @@ class SignupSerializerTests(TestCase):
         data = {
             'signup_type': "not_a_valid_choice"
         }
-        serializer = NewClientSignUpSerializer(data=data)
+        serializer = NewClientSignUpActionSerializer(data=data)
         self.assertFalse(serializer.is_valid())
 
-    def test_signup_serializer_business_address_fail(self):
+    def test_signup_serializer_organisation_address_fail(self):
         """
         """
 
         data = {
-            'signup_type': 'business',
+            'signup_type': 'organisation',
             'first_name': 'jim',
             'last_name': 'james',
             'email': 'jim@jim.jim',
@@ -31,20 +31,20 @@ class SignupSerializerTests(TestCase):
             'payment_method': 'invoice',
             'toc_agreed': 'true'
         }
-        serializer = NewClientSignUpSerializer(data=data)
+        serializer = NewClientSignUpActionSerializer(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertEqual(
             serializer.errors['non_field_errors'],
-            ["These fields are required for businesses: " +
+            ["These fields are required for organisations: " +
              "['company_name', 'address_1', 'city', 'postal_code', 'country']"]
         )
 
-    def test_signup_serializer_business_address(self):
+    def test_signup_serializer_organisation_address(self):
         """
         """
 
         data = {
-            'signup_type': 'business',
+            'signup_type': 'organisation',
             'first_name': 'jim',
             'last_name': 'james',
             'email': 'jim@jim.jim',
@@ -58,15 +58,15 @@ class SignupSerializerTests(TestCase):
             'country': 'nz',
 
         }
-        serializer = NewClientSignUpSerializer(data=data)
+        serializer = NewClientSignUpActionSerializer(data=data)
         self.assertTrue(serializer.is_valid())
 
-    def test_signup_serializer_business_address_billing_fail(self):
+    def test_signup_serializer_organisation_address_billing_fail(self):
         """
         """
 
         data = {
-            'signup_type': 'business',
+            'signup_type': 'organisation',
             'first_name': 'jim',
             'last_name': 'james',
             'email': 'jim@jim.jim',
@@ -82,22 +82,22 @@ class SignupSerializerTests(TestCase):
             'primary_address_is_billing': 'false',
 
         }
-        serializer = NewClientSignUpSerializer(data=data)
+        serializer = NewClientSignUpActionSerializer(data=data)
         self.assertFalse(serializer.is_valid())
         self.assertEqual(
             serializer.errors['non_field_errors'],
-            ["These fields are required for businesses: " +
+            ["These fields are required for organisations: " +
              "['bill_first_name', 'bill_last_name', 'bill_email', " +
              "'bill_phone', 'bill_address_1', 'bill_city', " +
-             "'bill_region', 'bill_postal_code', 'bill_country']"]
+             "'bill_postal_code', 'bill_country']"]
         )
 
-    def test_signup_serializer_business_address_billing(self):
+    def test_signup_serializer_organisation_address_billing(self):
         """
         """
 
         data = {
-            'signup_type': 'business',
+            'signup_type': 'organisation',
             'first_name': 'jim',
             'last_name': 'james',
             'email': 'jim@jim.jim',
@@ -117,12 +117,11 @@ class SignupSerializerTests(TestCase):
             'primary_address_is_billing': 'false',
             'bill_address_1': 'yellow brick road',
             'bill_city': 'emerald city',
-            'bill_region': 'over the rainbow',
             'bill_postal_code': 'NW1',
             'bill_country': 'Oz'
 
         }
-        serializer = NewClientSignUpSerializer(data=data)
+        serializer = NewClientSignUpActionSerializer(data=data)
         self.assertTrue(serializer.is_valid())
 
     def test_signup_serializer_individual(self):
@@ -138,5 +137,5 @@ class SignupSerializerTests(TestCase):
             'toc_agreed': 'true',
 
         }
-        serializer = NewClientSignUpSerializer(data=data)
+        serializer = NewClientSignUpActionSerializer(data=data)
         self.assertTrue(serializer.is_valid())

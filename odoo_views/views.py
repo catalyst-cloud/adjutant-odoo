@@ -23,8 +23,15 @@ from stacktask.api.v1.utils import create_notification, add_task_id_for_roles
 
 class OpenStackSignUp(tasks.TaskView):
 
-    default_actions = ['NewClientSignUp', 'NewProjectSignUp']
+    default_actions = ['NewClientSignUpAction', 'NewProjectSignUpAction']
     task_type = 'signup'
+
+    def get(self, request):
+        """
+        The OpenStackSignUp endpoint does not support GET.
+        This returns a 404.
+        """
+        return Response(status=404)
 
     def post(self, request, format=None):
         """
@@ -45,7 +52,8 @@ class OpenStackSignUp(tasks.TaskView):
         # Will a default network be setup:
         request.data['setup_network'] = class_conf.get('setup_network', False)
         # domain_id for new project:
-        request.data['domain_id'] = class_conf.get('default_domain_id')
+        request.data['domain_id'] = class_conf.get(
+            'default_domain_id', 'default')
         # parent_id for new project, if null defaults to domain:
         request.data['parent_id'] = class_conf.get('default_parent_id')
 
@@ -61,10 +69,7 @@ class OpenStackSignUp(tasks.TaskView):
             'notes':
                 ['New OpenStackSignUp task.']
         }
-        notification = create_notification(processed['task'], notes)
-        if class_conf.get('auto_acknowledge'):
-            notification.acknowledged = True
-            notification.save()
+        create_notification(processed['task'], notes)
         self.logger.info("(%s) - Task created." % timezone.now())
 
         response_dict = {'notes': ['Sign-up submitted.']}

@@ -17,7 +17,7 @@ from stacktask.actions.serializers import BaseUserNameSerializer
 from rest_framework import serializers
 
 
-class NewClientSignUpSerializer(serializers.Serializer):
+class NewClientSignUpActionSerializer(serializers.Serializer):
 
     signup_type = serializers.ChoiceField(
         choices=['individual', 'organisation'])
@@ -37,7 +37,6 @@ class NewClientSignUpSerializer(serializers.Serializer):
     address_1 = serializers.CharField(max_length=200, default="")
     address_2 = serializers.CharField(max_length=200, default="")
     city = serializers.CharField(max_length=100, default="")
-    region = serializers.CharField(max_length=100, default="")
     postal_code = serializers.CharField(max_length=100, default="")
     country = serializers.CharField(max_length=100, default="")
 
@@ -51,7 +50,6 @@ class NewClientSignUpSerializer(serializers.Serializer):
     bill_address_1 = serializers.CharField(max_length=200, default="")
     bill_address_2 = serializers.CharField(max_length=200, default="")
     bill_city = serializers.CharField(max_length=100, default="")
-    bill_region = serializers.CharField(max_length=100, default="")
     bill_postal_code = serializers.CharField(max_length=100, default="")
     bill_country = serializers.CharField(max_length=100, default="")
 
@@ -75,9 +73,7 @@ class NewClientSignUpSerializer(serializers.Serializer):
             self._check_field(missing_fields, 'email', data)
             self._check_field(missing_fields, 'phone', data)
             self._check_field(missing_fields, 'address_1', data)
-            data.get('address_2')  # Not required
             self._check_field(missing_fields, 'city', data)
-            data.get('region')  # Not required
             self._check_field(
                 missing_fields, 'postal_code', data)
             self._check_field(missing_fields, 'country', data)
@@ -101,8 +97,6 @@ class NewClientSignUpSerializer(serializers.Serializer):
                 self._check_field(
                     missing_fields, 'bill_city', data)
                 self._check_field(
-                    missing_fields, 'bill_region', data)
-                self._check_field(
                     missing_fields, 'bill_postal_code', data)
                 self._check_field(
                     missing_fields, 'bill_country', data)
@@ -119,9 +113,8 @@ class NewClientSignUpSerializer(serializers.Serializer):
         return data
 
 
-# Extending class just for name clarity.
-class NewProjectSignUpSerializer(BaseUserNameSerializer):
+class NewProjectSignUpActionSerializer(BaseUserNameSerializer):
     parent_id = serializers.CharField(
-        max_length=200, default=None, allow_null=True, allow_blank=True)
+        max_length=64, default=None, allow_null=True, allow_blank=True)
     signup_type = serializers.ChoiceField(
         choices=['individual', 'organisation'])

@@ -26,8 +26,8 @@ You will also need to add some taskview settings for the new signups view:
 
     signup:
         additional_actions:
-            - AddDefaultUsersToProject
-            - NewProjectDefaultNetwork
+            - AddDefaultUsersToProjectAction
+            - NewProjectDefaultNetworkAction
         notifications:
             standard:
                 EmailNotification:
@@ -43,11 +43,26 @@ You will also need to add some taskview settings for the new signups view:
                     queue: signups
         default_region: RegionOne
         # If 'None' (null in yaml), will default to domain as parent.
-        # If domain isn't set explicity, will service user domain (see KEYSTONE).
+        # If domain isn't set explicity, will use service user domain (see KEYSTONE).
         default_domain_id: default
         default_parent_id: null
         setup_network: True
-        auto_acknowledge: True
 
 
 Once active, and if debug is turned on, you can see the endpoint and test it with the browsable django-rest-framework api.
+
+You will also need to add 'stacktask-odoo' plugin settings:
+
+::
+
+    PLUGIN_SETTINGS:
+        stacktask-odoo:
+            odoorpc:
+                odoo:
+                    hostname: <odoo_hostname>
+                    protocol: jsonrpc+ssl
+                    port: 443
+                    version: <odoo_version>
+                    database: <odoo_db_name>
+                    user: <odoo_username
+                    password: <odoo_password>

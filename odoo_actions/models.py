@@ -14,17 +14,19 @@
 
 import re
 
+from django.conf import settings
+
 from odoo_actions.odoo_client import get_odoo_client
 from odoo_actions.utils import generate_short_id
 
 from stacktask.actions.models import (
-    BaseAction, register_action_class, NewProjectWithUser)
+    BaseAction, register_action_class, NewProjectWithUserAction)
 from stacktask.actions import user_store
 from odoo_actions.serializers import (
-    NewClientSignUpSerializer, NewProjectSignUpSerializer)
+    NewClientSignUpActionSerializer, NewProjectSignUpActionSerializer)
 
 
-class NewClientSignUp(BaseAction):
+class NewClientSignUpAction(BaseAction):
     """"""
 
     required = [
@@ -47,7 +49,6 @@ class NewClientSignUp(BaseAction):
         'address_1',
         'address_2',
         'city',
-        'region',
         'postal_code',
         'country',
         'payment_method',
@@ -60,7 +61,6 @@ class NewClientSignUp(BaseAction):
         'bill_address_1',
         'bill_address_2',
         'bill_city',
-        'bill_region',
         'bill_postal_code',
         'bill_country',
         'discount_code',
@@ -69,8 +69,48 @@ class NewClientSignUp(BaseAction):
     def __init__(self, data, **kwargs):
         if data['signup_type'] == 'organisation':
             self.required = self.organisation_required
-        super(NewClientSignUp, self).__init__(data, **kwargs)
 
+        cloud_tag_id = settings.ACTION_SETTINGS.get(
+            'NewClientSignUpAction', {}).get("cloud_tag_id")
+        if cloud_tag_id:
+            self.cloud_tag_id = int(cloud_tag_id)
+        else:
+            self.cloud_tag_id = None
+
+        super(NewClientSignUpAction, self).__init__(data, **kwargs)
+
+    # Core action functions:
+    def _pre_approve(self):
+        # project_name added to task cache for the follow action
+        self.action.task.cache['project_name'] = self._construct_project_name()
+
+        self._validate()
+
+    def _post_approve(self):
+        self.action.task.cache['project_name'] = self._construct_project_name()
+
+        # revalidate to make sure stuff still makes sense for odoo
+        self._validate()
+        if not self.valid:
+            return
+
+        # now that someone has approved the task this action
+        # will need to create data in Odoo based on what the validation
+        # found out.
+        if self.signup_type == "organisation":
+            self._create_organisation()
+        elif self.signup_type == "individual":
+            self._create_individual()
+
+        # TODO(adriant): Handle discount codes automatically.
+
+    def _submit(self, token_data):
+        # mostly there shouldn't need to be anything that occurs here
+        # as this action will have completed all it's work at the
+        # post_approve step
+        pass
+
+    # Helper functions:
     def _construct_project_name(self):
         project_name = self.get_cache('project_name')
         if project_name:
@@ -110,72 +150,249 @@ class NewClientSignUp(BaseAction):
         # for later so this action knows if it should create the new
         # company/contact/etc or not at the post_approve step.
 
-        self.action.valid = True
-        self.action.save()
-
-    def _pre_approve(self):
-        # project_name added to task cache for the follow action
-        self.action.task.cache['project_name'] = self._construct_project_name()
-
-        self._validate()
-
-    def _post_approve(self):
-        self.action.task.cache['project_name'] = self._construct_project_name()
-
         partner_id = self.get_cache('partner_id')
         if partner_id:
-            self.action.task.cache['partner_id'] = partner_id
-            self.add_note("Partner already created.")
+            self.add_note(
+                "Skipping validation as we've already created the partner.")
+            self.action.valid = True
+            self.action.save()
             return
 
-        # revalidate to make sure stuff still makes sense for odoo
-        self._validate()
-        if not self.valid:
-            return
+        if self.signup_type == "organisation":
+            self.action.valid = self._validate_organisation()
+        elif self.signup_type == "individual":
+            self.action.valid = self._validate_individual()
+        self.action.save()
 
-        # now that someone has approved the task this action
-        # will need to create data in Odoo based on what the validation
-        # found out.
+    def _validate_organisation(self):
+        odoo_client = get_odoo_client()
+
+        customers = odoo_client.partners.fuzzy_match(
+            name=self.company_name, is_company=True)
+
+        if len(customers) > 0:
+            for customer in customers:
+                if customer['match'] == 1:
+                    self.add_note(
+                        "Exact company exists: %s" % customer['name'])
+                    self._validate_similar_organisation(customer)
+                else:
+                    self.add_note(
+                        "Similar company exists: %s" % customer['name'])
+                    self._validate_similar_organisation(customer)
+
+            # We set the name to something obvious in odoo
+            self.odoo_company_name = (
+                "%s - (POSSIBLE DUPLICATE)" % self.company_name)
+            self.add_note(
+                "Rather than reuse existing will create duplicate as: '%s'" %
+                self.odoo_company_name)
+            self.add_note(
+                "Needs Manual merge if was correct match, or rename if not.")
+            return True
+        else:
+            self.add_note(
+                "No existing company with name '%s'." %
+                self.company_name)
+            self.odoo_company_name = self.company_name
+            return True
+
+    def _validate_similar_organisation(self, customer):
+        odoo_client = get_odoo_client()
+
+        company = odoo_client.partners.get(customer['id'])[0]
+        tags = [tag.id for tag in company.category_id]
+        if self.cloud_tag_id and self.cloud_tag_id in tags:
+            self.add_note(
+                "Company: %s has cloud tag." % customer['name'])
+        elif self.cloud_tag_id:
+            self.add_note(
+                "Company: %s does not have cloud tag." % customer['name'])
+
+        primary_name = "%s %s" % (self.first_name, self.last_name)
+        contacts = odoo_client.partners.fuzzy_match(
+            name=primary_name, check_parent=True,
+            parent=customer['id'])
+
+        for contact in contacts:
+            if contact['match'] == 1:
+                self.add_note(
+                    "Primary contact: %s found for company: %s" %
+                    (contact['name'], customer['name']))
+            else:
+                self.add_note(
+                    "Similar primary contact: %s found for company: %s" %
+                    (contact['name'], customer['name']))
+
+        if not self.primary_contact_is_billing:
+            billing_name = "%s %s" % (self.first_name, self.last_name)
+            contacts = odoo_client.partners.fuzzy_match(
+                name=billing_name, check_parent=True,
+                parent=customer['id'])
+
+            for contact in contacts:
+                if contact['match'] == 1:
+                    self.add_note(
+                        "Billing contact: %s found for company: %s" %
+                        (contact['name'], customer['name']))
+                else:
+                    self.add_note(
+                        "Similar billing contact: %s found for company: %s" %
+                        (contact['name'], customer['name']))
+
+    def _validate_individual(self):
+        # TODO(adriant): to be removed when can support it.
+        # Probably not until credit card payments.
+        self.add_note("Individual Signups not supported yet.")
+        return False
 
         odoo_client = get_odoo_client()
 
-        if self.action.state == 'default':
+        # TODO(adrian): when odoo supports first/last change this:
+        customers = odoo_client.partners.fuzzy_match(
+            name="%s %s" % (self.first_name, self.last_name),
+            check_parent=True)
+        if len(customers) > 0:
+            for customer in customers:
+                if customer['match'] == 1:
+                    self.add_note("Exact customer already exists: %s %s" % (
+                        self.first_name, self.last_name))
+                else:
+                    self.add_note("Similar customer already exists: %s %s" % (
+                        self.first_name, self.last_name))
+
+            self.customer_name = ("%s %s - (POSSIBLE DUPLICATE)" % (
+                self.first_name, self.last_name))
+            self.add_note(
+                "Rather than reuse existing will create duplicate as: '%s'" %
+                self.customer_name)
+            return True
+        else:
+            self.add_note(
+                "No existing customer with name: %s %s" %
+                (self.first_name, self.last_name))
+            self.customer_name = ("%s %s" % (
+                self.first_name, self.last_name))
+            return True
+
+    def _create_organisation(self):
+        odoo_client = get_odoo_client()
+
+        # First we handle the company.
+        # In this context partner is the company:
+        partner_id = self.get_cache('partner_id')
+        if partner_id:
+            self.add_note(
+                "Partner '%s' already created." % self.odoo_company_name)
+        else:
             try:
-                odoo_resp = odoo_client.do_an_odoo_thing()
+                tags = []
+                if self.cloud_tag_id:
+                    tags.append((6, 0, [self.cloud_tag_id]))
+                partner_id = odoo_client.partners.create(
+                    is_company=True, name=self.odoo_company_name,
+                    street=self.address_1, street2=self.address_2,
+                    city=self.city, zip=self.postal_code,
+                    country=self.country, phone=self.phone,
+                    category_id=tags)
             except Exception as e:
                 self.add_note(
                     "Error: '%s' while setting up partner in Odoo." % e)
                 raise
+            self.set_cache('partner_id', partner_id)
+            self.add_note("Partner '%s' created." % self.odoo_company_name)
+        self.action.task.cache['partner_id'] = partner_id
 
-            # we need to set the partner_id to the task cache
-            # so it can be used by the NewProject _post_approve
-            # step
-            self.action.task.cache['partner_id'] = odoo_resp.get('partner_id')
-            # we also save it to the action cache incase the action runs again
-            # both as a flag for completion, and to be able to set it to
-            # the task cache again.
-            self.set_cache('partner_id', odoo_resp.get('partner_id'))
-        elif self.action.state == "existing":
+        # Now we handle the primary contact for the new project:
+        primary_id = self.get_cache('primary_id')
+        if primary_id:
+            self.add_note("Primary contact already created.")
+        else:
             try:
-                odoo_resp = odoo_client.do_an_odoo_thing()
+                # TODO(adrian): when odoo supports first/last change this:
+                name = "%s %s" % (self.first_name, self.last_name)
+                if (self.primary_contact_is_billing and
+                        not self.primary_address_is_billing):
+                    primary_id = odoo_client.partners.create(
+                        is_company=False, name=name,
+                        street=self.bill_address_1,
+                        street2=self.bill_address_2,
+                        city=self.bill_city, zip=self.bill_postal_code,
+                        country=self.bill_country,
+                        phone=self.bill_phone, parent_id=partner_id)
+                else:
+                    primary_id = odoo_client.partners.create(
+                        is_company=False, name=name,
+                        email=self.email, phone=self.phone,
+                        parent_id=partner_id,
+                        use_parent_address=True)
+            except Exception as e:
+                self.add_note(
+                    "Error: '%s' while setting up "
+                    "primary contact in Odoo." % e)
+                raise
+            self.set_cache('primary_id', primary_id)
+            self.add_note("Primary contact '%s' created." % name)
+        self.action.task.cache['primary_id'] = primary_id
+
+        billing_id = self.get_cache('billing_id')
+        if billing_id:
+            self.add_note("Billing contact already created.")
+        elif self.primary_contact_is_billing:
+            billing_id = primary_id
+        elif not self.primary_contact_is_billing:
+            try:
+                # TODO(adrian): when odoo supports first/last change this:
+                name = "%s %s" % (
+                    self.bill_first_name, self.bill_last_name)
+                if self.primary_address_is_billing:
+                    billing_id = odoo_client.partners.create(
+                        is_company=False, name=name,
+                        email=self.email, phone=self.phone,
+                        parent_id=partner_id,
+                        use_parent_address=True)
+                else:
+                    billing_id = odoo_client.partners.create(
+                        is_company=False, name=name,
+                        street=self.bill_address_1,
+                        street2=self.bill_address_2,
+                        city=self.bill_city, zip=self.bill_postal_code,
+                        country=self.bill_country,
+                        phone=self.bill_phone, parent_id=partner_id)
+            except Exception as e:
+                self.add_note(
+                    "Error: '%s' while setting up "
+                    "billing contact in Odoo." % e)
+                raise
+            self.set_cache('billing_id', billing_id)
+            self.add_note("Billing contact '%s' created." % name)
+        self.action.task.cache['billing_id'] = billing_id
+
+    def _create_individual(self):
+        odoo_client = get_odoo_client()
+
+        partner_id = self.get_cache('partner_id')
+        if partner_id:
+            self.add_note("Partner already created.")
+        else:
+            try:
+                tags = []
+                if self.cloud_tag_id:
+                    tags.append((6, 0, [self.cloud_tag_id]))
+                partner_id = odoo_client.partners.create(
+                    is_company=False, name=self.customer_name,
+                    email=self.email, phone=self.phone,
+                    category_id=tags)
             except Exception as e:
                 self.add_note(
                     "Error: '%s' while setting up partner in Odoo." % e)
                 raise
-
-            self.action.task.cache['partner_id'] = odoo_resp.get('partner_id')
-            self.set_cache('partner_id', odoo_resp.get('partner_id'))
-
-        self.action.save()
-
-    def _submit(self, token_data):
-        # mostly there shouldn't need to be anything that occurs here
-        # as this action will have completed all it's work at the
-        # post_approve step
-        pass
+            self.set_cache('partner_id', partner_id)
+            self.add_note("Partner '%s' created." % self.customer_name)
+        self.action.task.cache['partner_id'] = partner_id
 
 
-class NewProjectSignUp(NewProjectWithUser):
+class NewProjectSignUpAction(NewProjectWithUserAction):
 
     # project_name is not required as this action
     # will be getting it from the cache.
@@ -187,7 +404,17 @@ class NewProjectSignUp(NewProjectWithUser):
         'domain_id',
     ]
 
-    def _validate_project(self):
+    def __init__(self, data, **kwargs):
+        cloud_tag_id = settings.ACTION_SETTINGS.get(
+            'NewClientSignUpAction', {}).get("cloud_tag_id")
+        if cloud_tag_id:
+            self.cloud_tag_id = int(cloud_tag_id)
+        else:
+            self.cloud_tag_id = None
+
+        super(NewProjectSignUpAction, self).__init__(data, **kwargs)
+
+    def _validate_project_absent(self):
         project_name = self.get_cache('project_name')
         if not project_name:
             project_name = self.action.task.cache.get('project_name')
@@ -195,7 +422,9 @@ class NewProjectSignUp(NewProjectWithUser):
                 self.add_note("No project_name has been set.")
                 return False
 
-            project = self.id_manager.find_project(
+            id_manager = user_store.IdentityManager()
+
+            project = id_manager.find_project(
                 project_name, self.domain_id)
             if project:
                 self.add_note("Existing project with name '%s'." %
@@ -211,7 +440,7 @@ class NewProjectSignUp(NewProjectWithUser):
                     ran_hash = generate_short_id()
 
                     project_name = "%s~%s" % (project_name, ran_hash)
-                    project = self.id_manager.find_project(
+                    project = id_manager.find_project(
                         project_name, self.domain_id)
                     if project:
                         self.add_note(
@@ -238,61 +467,130 @@ class NewProjectSignUp(NewProjectWithUser):
 
     def _post_approve(self):
         # first we run the inherited _post_approve to create the project
-        super(NewProjectSignUp, self)._post_approve()
+        super(NewProjectSignUpAction, self)._post_approve()
 
-        project_linked = self.get_cache('project_linked')
-        user_linked = self.get_cache('user_linked')
+        odoo_project_id = self.get_cache('odoo_project_id')
+        contacts_linked = self.get_cache('contacts_linked')
 
-        if project_linked and user_linked:
-            self.add_note("Project and user already linked in Odoo.")
+        if odoo_project_id and contacts_linked:
+            self.add_note("Project and contacts already linked in Odoo.")
             return
 
-        # now that the project and user exist we get their ids
+        # now that the project exists we get its id
         project_id = self.get_cache('project_id')
-        user_id = self.get_cache('user_id')
 
         # update the project with metadata:
         id_manager = user_store.IdentityManager()
         id_manager.update_project(project_id, signup_type=self.signup_type)
 
-        try:
-            partner_id = self.action.task.cache['partner_id']
-            # setup the odoo client
-            odoo_client = get_odoo_client()
-        except KeyError:
+        partner_id = self.action.task.cache.get('partner_id')
+        if not partner_id:
             self.add_note(
-                "Error: No partner id. Failed linking project: %s" %
+                "Error: No partner_id. Failed linking project: %s" %
                 self.project_name)
-            raise
-        except Exception as e:
-            self.add_note(
-                "Error: '%s' while setting up Odooclient." % e)
-            raise
+            self.action.valid = False
+            self.action.save()
+            return
 
-        if not project_linked:
+        if self.signup_type == "organisation":
+            primary_id = self.action.task.cache.get('primary_id')
+            if not primary_id:
+                self.add_note(
+                    "Error: No primary_id. Failed linking project: %s" %
+                    self.project_name)
+                self.action.valid = False
+                self.action.save()
+                return
+
+        if not odoo_project_id:
+            self._create_odoo_project(project_id)
+
+        if not contacts_linked:
             try:
-                odoo_client.do_another_odoo_thing(partner_id, project_id)
-
-                # set a flag to tell us we've linked the project in Odoo.
-                self.set_cache('project_linked', True)
+                if self.signup_type == "organisation":
+                    self._link_organisation_contacts()
+                elif self.signup_type == "individual":
+                    self._link_individual()
+                self.set_cache('contacts_linked', True)
             except Exception as e:
                 self.add_note(
-                    "Error: '%s' while linking project: %s in Odoo." %
+                    "Error: '%s' linking contacts for project: %s in Odoo." %
                     (e, project_id))
                 raise
 
-        if not user_linked:
-            try:
-                odoo_client.do_another_odoo_thing(partner_id, user_id)
+    def _create_odoo_project(self, project_id):
+        odoo_client = get_odoo_client()
 
-                # set a flag to tell us we've linked the user in Odoo.
-                self.set_cache('user_linked', True)
-            except Exception as e:
-                self.add_note(
-                    "Error: '%s' while linking user: %s in Odoo." %
-                    (e, user_id))
-                raise
+        try:
+            id_manager = user_store.IdentityManager()
+
+            project = id_manager.get_project(project_id)
+
+            odoo_project_id = odoo_client.projects.create(
+                name=project.name,
+                tenant_id=project.id)
+
+            # set a flag to tell us we've created the project in Odoo.
+            self.set_cache('odoo_project_id', odoo_project_id)
+        except Exception as e:
+            self.add_note(
+                "Error: '%s' while linking project: %s in Odoo." %
+                (e, project_id))
+            raise
+
+    def _link_organisation_contacts(self):
+        partner_id = self.action.task.cache.get('partner_id')
+        primary_id = self.action.task.cache.get('primary_id')
+        odoo_project_id = self.get_cache('odoo_project_id')
+        odoo_client = get_odoo_client()
+
+        owner_rel = self.get_cache('owner_rel')
+        if not owner_rel:
+            owner_rel = odoo_client.project_relationships.create(
+                cloud_tenant=odoo_project_id,
+                partner_id=partner_id,
+                contact_type="owner")
+            self.set_cache('owner_rel', owner_rel)
+
+        primary_rel = self.get_cache('primary_rel')
+        if not primary_rel:
+            primary_rel = odoo_client.project_relationships.create(
+                cloud_tenant=odoo_project_id,
+                partner_id=primary_id,
+                contact_type="primary")
+            self.set_cache('primary_rel', primary_rel)
+
+        billing_id = self.action.task.cache.get('billing_id')
+
+        billing_rel = self.get_cache('billing_rel')
+        if billing_id and not billing_rel:
+            billing_rel = odoo_client.project_relationships.create(
+                cloud_tenant=odoo_project_id,
+                partner_id=billing_id,
+                contact_type="billing")
+            self.set_cache('billing_rel', billing_rel)
+
+    def _link_individual(self):
+        partner_id = self.action.task.cache.get('partner_id')
+        odoo_project_id = self.get_cache('odoo_project_id')
+        odoo_client = get_odoo_client()
+
+        owner_rel = self.get_cache('owner_rel')
+        if not owner_rel:
+            owner_rel = odoo_client.project_relationships.create(
+                cloud_tenant=odoo_project_id,
+                partner_id=partner_id,
+                contact_type="owner")
+            self.set_cache('owner_rel', owner_rel)
+
+        primary_rel = self.get_cache('primary_rel')
+        if not primary_rel:
+            primary_rel = odoo_client.project_relationships.create(
+                cloud_tenant=odoo_project_id,
+                partner_id=partner_id,
+                contact_type="primary")
+            self.set_cache('primary_rel', primary_rel)
 
 
-register_action_class(NewClientSignUp, NewClientSignUpSerializer)
-register_action_class(NewProjectSignUp, NewProjectSignUpSerializer)
+register_action_class(NewClientSignUpAction, NewClientSignUpActionSerializer)
+register_action_class(NewProjectSignUpAction, NewProjectSignUpActionSerializer)
