@@ -6,7 +6,7 @@ from .projects import CloudProjectManager
 from .credits import CloudCreditManager
 from .partners import PartnerManager
 from .project_relationships import ProjectRelationshipManager
-
+from .countries import CountryManager
 
 cached_client = None
 
@@ -38,12 +38,14 @@ class OdooClient(object):
         self._Partner = self._odoo.env['res.partner']
         self._Credit = self._odoo.env['cloud.credit']
         self._PartnerRelationship = self._odoo.env['cloud.tenant_partner']
+        self._Country = self._odoo.env['res.country']
 
         # Now setup the managers:
         self.projects = CloudProjectManager(self)
         self.credits = CloudCreditManager(self)
         self.partners = PartnerManager(self)
         self.project_relationships = ProjectRelationshipManager(self)
+        self.countries = CountryManager(self)
 
 
 def get_odoo_client():

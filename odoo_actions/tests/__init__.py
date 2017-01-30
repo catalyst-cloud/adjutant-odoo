@@ -1,5 +1,5 @@
 import six
-
+from mock import MagicMock
 
 odoo_cache = {}
 base_id = 1
@@ -14,7 +14,26 @@ def _get_new_id():
 
 class OdooObject(object):
     def __init__(self, fields):
+        self.fields = fields
+        if 'country_id' in fields:
+            country_id = fields.pop('country_id')
+            self.country_id = OdooObject(
+                odoo_cache['countries'][country_id])
         self.__dict__.update(fields)
+
+    def __setattr__(self, name, value):
+        if name not in ['fields', 'default', 'country_id']:
+            self.fields[name] = value
+        if name == 'country_id' and type(value) == OdooObject:
+            self.fields[name] = value.id
+        if name == 'country_id' and type(value) != OdooObject:
+            self.fields[name] = value
+        super(OdooObject, self).__setattr__(name, value)
+
+    def __getattr__(self, name):
+        if name == 'env':
+            return MagicMock()
+        return None
 
 
 class FakeOdooResourceManager(object):
@@ -33,8 +52,9 @@ class FakeOdooResourceManager(object):
     def get(self, ids):
         resources = []
         for res_id in self._list_or_tuple(ids):
-            resources.append(
-                OdooObject(self.odoo_cache[self.resource].get(res_id)))
+            res = self.odoo_cache[self.resource].get(res_id)
+            if res:
+                resources.append(OdooObject(res))
         return resources
 
     def list(self, filters):
@@ -47,6 +67,9 @@ class FakeOdooResourceManager(object):
             match = True
             for key, operator, value in filters:
                 res_val = resource.get(key)
+                if isinstance(res_val, OdooObject):
+                    res_val = res_val.id
+
                 if operator == "=":
                     if res_val != value:
                         match = False
@@ -68,6 +91,11 @@ class FakeOdooResourceManager(object):
         fields['id'] = res_id
         self.odoo_cache[self.resource][res_id] = fields
         return res_id
+
+    def delete(self, res_ids):
+        res_ids = self._list_or_tuple(res_ids)
+        for res_id in res_ids:
+            del self.odoo_cache[self.resource][res_id]
 
 
 class FakePartnerManager(FakeOdooResourceManager):
@@ -100,6 +128,19 @@ class FakePartnerManager(FakeOdooResourceManager):
         return matches
 
 
+class FakeCountryManager(FakeOdooResourceManager):
+
+    def fuzzy_match(self, name):
+        search = [
+            ('name', '=', name)
+        ]
+
+        return self.list(search)
+
+    def get_closest_country(self, name):
+        return self.fuzzy_match(name)[0]
+
+
 class FakeOdooClient(object):
 
     def __init__(self):
@@ -107,6 +148,8 @@ class FakeOdooClient(object):
         self.projects = FakeOdooResourceManager("projects")
         self.partners = FakePartnerManager("partners")
         self.project_relationships = FakeOdooResourceManager("project_rels")
+        self.countries = FakeCountryManager("countries")
+        self._odoo = MagicMock()
 
 
 def setup_odoo_cache():
@@ -116,6 +159,11 @@ def setup_odoo_cache():
         'projects': {},
         'partners': {},
         'project_rels': {},
+        'countries': {
+            1: {'name': 'Rivendell', 'id': 1},
+            2: {'name': 'The Shire', 'id': 2},
+            3: {'name': 'nz', 'id': 3},
+        }
     })
 
 
