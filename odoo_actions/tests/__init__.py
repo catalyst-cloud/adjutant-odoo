@@ -163,6 +163,7 @@ def setup_odoo_cache():
             1: {'name': 'Rivendell', 'id': 1},
             2: {'name': 'The Shire', 'id': 2},
             3: {'name': 'nz', 'id': 3},
+            4: {'name': 'Oz', 'id': 4}
         }
     })
 

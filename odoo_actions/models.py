@@ -159,9 +159,11 @@ class NewClientSignUpAction(BaseAction):
             return
 
         if self.signup_type == "organisation":
-            self.action.valid = self._validate_organisation()
+            self.action.valid = (self._validate_organisation() and
+                                 self._validate_countries_exists())
         elif self.signup_type == "individual":
-            self.action.valid = self._validate_individual()
+            self.action.valid = (self._validate_individual() and
+                                 self._validate_primary_country())
         self.action.save()
 
     def _validate_organisation(self):
@@ -275,6 +277,35 @@ class NewClientSignUpAction(BaseAction):
                 self.first_name, self.last_name))
             return True
 
+    def _validate_countries_exists(self):
+        if self.primary_address_is_billing:
+            return self._validate_primary_country()
+
+        return (self._validate_primary_country() and
+                self._validate_billing_country())
+
+    def _validate_billing_country(self):
+        odooclient = get_odoo_client()
+        try:
+            self.bill_country_id = odooclient.countries.get_closest_country(
+                self.bill_country).id
+            self.add_note("Found country %s" % self.bill_country)
+            return True
+        except IndexError:
+            self.add_note("Did not find country %s" % self.bill_country)
+            return False
+
+    def _validate_primary_country(self):
+        odooclient = get_odoo_client()
+        try:
+            self.country_id = odooclient.countries.get_closest_country(
+                self.country).id
+            self.add_note("Found country %s" % self.country)
+            return True
+        except IndexError:
+            self.add_note("Did not find country %s" % self.country)
+            return False
+
     def _create_organisation(self):
         odoo_client = get_odoo_client()
 
@@ -293,7 +324,7 @@ class NewClientSignUpAction(BaseAction):
                     is_company=True, name=self.odoo_company_name,
                     street=self.address_1, street2=self.address_2,
                     city=self.city, zip=self.postal_code,
-                    country=self.country, phone=self.phone,
+                    country_id=self.country_id, phone=self.phone,
                     category_id=tags)
             except Exception as e:
                 self.add_note(
@@ -318,7 +349,7 @@ class NewClientSignUpAction(BaseAction):
                         street=self.bill_address_1,
                         street2=self.bill_address_2,
                         city=self.bill_city, zip=self.bill_postal_code,
-                        country=self.bill_country,
+                        country_id=self.bill_country_id,
                         phone=self.bill_phone, parent_id=partner_id)
                 else:
                     primary_id = odoo_client.partners.create(
@@ -357,7 +388,7 @@ class NewClientSignUpAction(BaseAction):
                         street=self.bill_address_1,
                         street2=self.bill_address_2,
                         city=self.bill_city, zip=self.bill_postal_code,
-                        country=self.bill_country,
+                        country_id=self.bill_country_id,
                         phone=self.bill_phone, parent_id=partner_id)
             except Exception as e:
                 self.add_note(
