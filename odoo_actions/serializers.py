@@ -28,7 +28,8 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=100)
     toc_agreed = serializers.BooleanField()
-    discount_code = serializers.CharField(max_length=100, default="")
+    discount_code = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
     payment_method = serializers.ChoiceField(
         choices=['invoice', 'credit_card'], default='credit_card')
 
@@ -41,17 +42,25 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
     country = serializers.CharField(max_length=100, default="")
 
     primary_contact_is_billing = serializers.BooleanField(default=True)
-    bill_first_name = serializers.CharField(max_length=100, default="")
-    bill_last_name = serializers.CharField(max_length=100, default="")
-    bill_email = serializers.EmailField(default="")
-    bill_phone = serializers.CharField(max_length=100, default="")
+    bill_first_name = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
+    bill_last_name = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
+    bill_email = serializers.EmailField(default="", allow_blank=True)
+    bill_phone = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
 
     primary_address_is_billing = serializers.BooleanField(default=True)
-    bill_address_1 = serializers.CharField(max_length=200, default="")
-    bill_address_2 = serializers.CharField(max_length=200, default="")
-    bill_city = serializers.CharField(max_length=100, default="")
-    bill_postal_code = serializers.CharField(max_length=100, default="")
-    bill_country = serializers.CharField(max_length=100, default="")
+    bill_address_1 = serializers.CharField(
+        max_length=200, default="", allow_blank=True)
+    bill_address_2 = serializers.CharField(
+        max_length=200, default="", allow_blank=True)
+    bill_city = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
+    bill_postal_code = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
+    bill_country = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
 
     def _check_field(self, errors, field, data):
         value = data.get(field)

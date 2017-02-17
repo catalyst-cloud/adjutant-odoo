@@ -37,6 +37,7 @@ class NewClientSignUpAction(BaseAction):
         'phone',
         'discount_code',
         'payment_method',
+        'toc_agreed',
     ]
 
     organisation_required = [
@@ -64,6 +65,7 @@ class NewClientSignUpAction(BaseAction):
         'bill_postal_code',
         'bill_country',
         'discount_code',
+        'toc_agreed',
     ]
 
     def __init__(self, data, **kwargs):
