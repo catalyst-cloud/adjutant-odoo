@@ -14,14 +14,13 @@
 
 import re
 
-from django.conf import settings
-
 from odoo_actions.odoo_client import get_odoo_client
 from odoo_actions.utils import generate_short_id
 
-from stacktask.actions.models import (
-    BaseAction, register_action_class, NewProjectWithUserAction)
-from stacktask.actions import user_store
+from adjutant.actions.v1.models import register_action_class
+from adjutant.actions.v1.base import BaseAction
+from adjutant.actions.v1.projects import NewProjectWithUserAction
+from adjutant.actions import user_store
 from odoo_actions.serializers import (
     NewClientSignUpActionSerializer, NewProjectSignUpActionSerializer)
 
@@ -72,14 +71,13 @@ class NewClientSignUpAction(BaseAction):
         if data['signup_type'] == 'organisation':
             self.required = self.organisation_required
 
-        cloud_tag_id = settings.ACTION_SETTINGS.get(
-            'NewClientSignUpAction', {}).get("cloud_tag_id")
+        super(NewClientSignUpAction, self).__init__(data, **kwargs)
+
+        cloud_tag_id = self.settings.get("cloud_tag_id", {})
         if cloud_tag_id:
             self.cloud_tag_id = int(cloud_tag_id)
         else:
             self.cloud_tag_id = None
-
-        super(NewClientSignUpAction, self).__init__(data, **kwargs)
 
     # Core action functions:
     def _pre_approve(self):
@@ -430,16 +428,6 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
         'parent_id',
         'domain_id',
     ]
-
-    def __init__(self, data, **kwargs):
-        cloud_tag_id = settings.ACTION_SETTINGS.get(
-            'NewClientSignUpAction', {}).get("cloud_tag_id")
-        if cloud_tag_id:
-            self.cloud_tag_id = int(cloud_tag_id)
-        else:
-            self.cloud_tag_id = None
-
-        super(NewProjectSignUpAction, self).__init__(data, **kwargs)
 
     def _validate_project_absent(self):
         project_name = self.get_cache('project_name')

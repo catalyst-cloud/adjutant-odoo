@@ -13,7 +13,7 @@
 #    under the License.
 
 
-from stacktask.actions.serializers import BaseUserNameSerializer
+from adjutant.actions.v1.serializers import BaseUserNameSerializer
 from rest_framework import serializers
 
 

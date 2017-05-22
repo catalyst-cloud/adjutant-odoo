@@ -13,15 +13,14 @@
 #    under the License.
 
 from rest_framework.test import APITestCase
-from django.conf import settings
 
 from rest_framework import status
 
 import mock
 
-from stacktask.api.models import Task, Token
-from stacktask.api.v1 import tests
-from stacktask.api.v1.tests import FakeManager, setup_temp_cache
+from adjutant.api.models import Task, Token
+from adjutant.api.v1 import tests
+from adjutant.api.v1.tests import FakeManager, setup_temp_cache
 
 from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
@@ -31,23 +30,14 @@ class SignupViewTests(APITestCase):
     def setUp(self):
         setup_odoo_cache()
 
-    @classmethod
-    def setUpTestData(self):
-        settings.ACTIVE_TASKVIEWS.remove("CreateProject")
-        settings.ACTIVE_TASKVIEWS.append("OpenStackSignUp")
-
-    @mock.patch('stacktask.actions.models.user_store.IdentityManager',
+    @mock.patch('adjutant.actions.user_store.IdentityManager',
                 FakeManager)
-    @mock.patch(
-        'stacktask.actions.tenant_setup.models.user_store.IdentityManager',
-        FakeManager)
     @mock.patch('odoo_actions.models.get_odoo_client',
                 get_odoo_client)
     def test_new_signup(self):
         """
         Ensure the new signup workflow goes as expected.
         """
-
         setup_temp_cache({}, {})
 
         url = "/v1/openstack/sign-up"
@@ -119,11 +109,8 @@ class SignupViewTests(APITestCase):
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    @mock.patch('stacktask.actions.models.user_store.IdentityManager',
+    @mock.patch('adjutant.actions.user_store.IdentityManager',
                 FakeManager)
-    @mock.patch(
-        'stacktask.actions.tenant_setup.models.user_store.IdentityManager',
-        FakeManager)
     @mock.patch('odoo_actions.models.get_odoo_client',
                 get_odoo_client)
     def test_new_signup_existing_project(self):

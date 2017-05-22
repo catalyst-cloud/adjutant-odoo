@@ -1,2 +1,2 @@
-stacktask>=0.1.5
+python-adjutant>=0.2.1
 mock>=2.0.0

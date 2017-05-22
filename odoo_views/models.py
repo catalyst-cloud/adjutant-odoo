@@ -13,7 +13,7 @@
 #    under the License.
 
 
-from stacktask.api.v1.models import register_taskview_class
+from adjutant.api.v1.models import register_taskview_class
 
 from odoo_views import views
 

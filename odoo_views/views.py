@@ -17,8 +17,8 @@ from django.utils import timezone
 
 from rest_framework.response import Response
 
-from stacktask.api.v1 import tasks
-from stacktask.api.v1.utils import create_notification, add_task_id_for_roles
+from adjutant.api.v1 import tasks
+from adjutant.api.v1.utils import create_notification, add_task_id_for_roles
 
 
 class OpenStackSignUp(tasks.TaskView):

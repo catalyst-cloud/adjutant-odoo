@@ -12,20 +12,19 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from django.test import TestCase
-
 import mock
 
 from odoo_actions.models import (
     NewClientSignUpAction, NewProjectSignUpAction)
-from stacktask.api.models import Task
-from stacktask.api.v1 import tests
-from stacktask.api.v1.tests import FakeManager, setup_temp_cache
+from adjutant.api.models import Task
+from adjutant.api.v1 import tests
+from adjutant.api.v1.tests import (
+    FakeManager, setup_temp_cache, modify_dict_settings, AdjutantTestCase)
 
 from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
 
-class SignupActionTests(TestCase):
+class SignupActionTests(AdjutantTestCase):
 
     def setUp(self):
         setup_odoo_cache()
@@ -266,12 +265,25 @@ class SignupActionTests(TestCase):
         self.assertEquals(action.valid, True)
 
 
-class NewProjectSignUpActionTests(TestCase):
+@modify_dict_settings(
+    DEFAULT_ACTION_SETTINGS={
+        'key_list': ['NewProjectSignUpAction'],
+        'operation': 'override',
+        'value': {
+            "default_roles": [
+                "project_admin",
+                "project_mod",
+                "heat_stack_owner",
+                "_member_",
+            ]
+         }
+    })
+class NewProjectSignUpActionTests(AdjutantTestCase):
 
     def setUp(self):
         setup_odoo_cache()
 
-    @mock.patch('stacktask.actions.models.user_store.IdentityManager',
+    @mock.patch('adjutant.actions.user_store.IdentityManager',
                 FakeManager)
     @mock.patch('odoo_actions.models.get_odoo_client',
                 get_odoo_client)
@@ -333,7 +345,7 @@ class NewProjectSignUpActionTests(TestCase):
             sorted(['_member_', 'project_admin',
                     'project_mod', 'heat_stack_owner']))
 
-    @mock.patch('stacktask.actions.models.user_store.IdentityManager',
+    @mock.patch('adjutant.actions.user_store.IdentityManager',
                 FakeManager)
     @mock.patch('odoo_actions.models.get_odoo_client',
                 get_odoo_client)

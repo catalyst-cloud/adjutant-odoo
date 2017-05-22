@@ -21,11 +21,11 @@ with open('README.rst') as file:
     long_description = file.read()
 
 setup(
-    name='stacktask-odoo',
+    name='adjutant-odoo',
     version='0.1.1a5',
-    description='A plugin for StackTask with Odoo actions and views.',
+    description='A plugin for Adjutant with Odoo actions and views.',
     long_description=long_description,
-    url='https://github.com/catalyst/stacktask-odoo',
+    url='https://github.com/catalyst/adjutant-odoo',
     author='Adrian Turjak',
     author_email='adriant@catalyst.net.nz',
     license='Apache 2.0',
@@ -37,7 +37,7 @@ setup(
         'Framework :: Django :: 1.9',
         'Programming Language :: Python :: 2.7',
     ],
-    keywords='Odoo erp contacts task stacktask workflow',
+    keywords='Odoo erp contacts task adjutant workflow',
     packages=find_packages(),
     install_requires=required,
 )

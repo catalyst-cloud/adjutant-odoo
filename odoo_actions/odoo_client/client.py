@@ -53,7 +53,7 @@ def get_odoo_client():
     if not cached_client:
         # get odoo auth setting from settings
         conf = settings.PLUGIN_SETTINGS.get(
-            "stacktask-odoo", {}).get('odoorpc', {})
+            "adjutant-odoo", {}).get('odoorpc', {})
         # setup client
         cached_client = OdooClient(conf)
 
