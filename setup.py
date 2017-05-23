@@ -22,7 +22,7 @@ with open('README.rst') as file:
 
 setup(
     name='adjutant-odoo',
-    version='0.1.1a5',
+    version='0.2.0',
     description='A plugin for Adjutant with Odoo actions and views.',
     long_description=long_description,
     url='https://github.com/catalyst/adjutant-odoo',
@@ -34,7 +34,7 @@ setup(
         'Intended Audience :: Developers',
         'Intended Audience :: System Administrators',
         'License :: OSI Approved :: Apache Software License',
-        'Framework :: Django :: 1.9',
+        'Framework :: Django :: 1.11',
         'Programming Language :: Python :: 2.7',
     ],
     keywords='Odoo erp contacts task adjutant workflow',
