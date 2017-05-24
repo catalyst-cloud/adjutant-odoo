@@ -34,12 +34,17 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
         choices=['invoice', 'credit_card'], default='credit_card')
 
     # organisation details
-    company_name = serializers.CharField(max_length=100, default="")
-    address_1 = serializers.CharField(max_length=200, default="")
-    address_2 = serializers.CharField(max_length=200, default="")
-    city = serializers.CharField(max_length=100, default="")
-    postal_code = serializers.CharField(max_length=100, default="")
-    country = serializers.CharField(max_length=100, default="")
+    company_name = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
+    address_1 = serializers.CharField(
+        max_length=200, default="", allow_blank=True)
+    address_2 = serializers.CharField(
+        max_length=200, default="", allow_blank=True)
+    city = serializers.CharField(max_length=100, default="", allow_blank=True)
+    postal_code = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
+    country = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
 
     primary_contact_is_billing = serializers.BooleanField(default=True)
     bill_first_name = serializers.CharField(
