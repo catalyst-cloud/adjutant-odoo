@@ -164,8 +164,7 @@ class NewClientSignUpAction(BaseAction):
             self.action.valid = (self._validate_organisation() and
                                  self._validate_countries_exists())
         elif self.signup_type == "individual":
-            self.action.valid = (self._validate_individual() and
-                                 self._validate_primary_country())
+            self.action.valid = self._validate_individual()
         self.action.save()
 
     def _validate_organisation(self):
@@ -245,11 +244,6 @@ class NewClientSignUpAction(BaseAction):
                         (contact['name'], customer['name']))
 
     def _validate_individual(self):
-        # TODO(adriant): to be removed when can support it.
-        # Probably not until credit card payments.
-        self.add_note("Individual Signups not supported yet.")
-        return False
-
         odoo_client = get_odoo_client()
 
         # TODO(adrian): when odoo supports first/last change this:
