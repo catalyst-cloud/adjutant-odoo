@@ -316,7 +316,7 @@ class NewClientSignUpAction(BaseAction):
         partner_id = self.get_cache('partner_id')
         if partner_id:
             self.add_note(
-                "Partner '%s' already created." % self.odoo_company_name)
+                "Partner already created with id: %s." % partner_id)
         else:
             try:
                 tags = []
