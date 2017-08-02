@@ -112,6 +112,10 @@ class NewClientSignUpAction(BaseAction):
 
     # Helper functions:
     def _construct_project_name(self):
+        """Construct Name to match our convention.
+
+        The name needs to be a lowercase slug "[^0-9a-z_-]"
+        """
         project_name = self.get_cache('project_name')
         if project_name:
             return project_name
@@ -119,7 +123,7 @@ class NewClientSignUpAction(BaseAction):
         if self.signup_type == "organisation":
             # TODO(adriant): Figure out better regex as these may be
             # too restrictive.
-            regex = re.compile('[^0-9a-zA-Z._-]')
+            regex = re.compile('[^0-9a-zA-Z_-]')
             project_name = regex.sub('', self.company_name.replace(' ', '-'))
         elif self.signup_type == "individual":
             # TODO(adriant): same as above.
@@ -128,7 +132,8 @@ class NewClientSignUpAction(BaseAction):
                 regex.sub('', self.first_name.replace(' ', '-')),
                 regex.sub('', self.last_name.replace(' ', '-')))
 
-        self.set_cache('project_name', project_name)
+        # Now lowercase the name and set it to cache
+        self.set_cache('project_name', project_name.lower())
 
         return project_name
 
