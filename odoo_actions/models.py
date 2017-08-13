@@ -12,7 +12,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import re
+from django.utils.text import slugify
 
 from odoo_actions.odoo_client import get_odoo_client
 from odoo_actions.utils import generate_short_id
@@ -121,16 +121,13 @@ class NewClientSignUpAction(BaseAction):
             return project_name
 
         if self.signup_type == "organisation":
-            # TODO(adriant): Figure out better regex as these may be
-            # too restrictive.
-            regex = re.compile('[^0-9a-zA-Z_-]')
-            project_name = regex.sub('', self.company_name.replace(' ', '-'))
+            # TODO(adriant): One option later may be to allow unicode:
+            # slugify(value, allow_unicode=True)
+            project_name = str(slugify(self.company_name))
         elif self.signup_type == "individual":
             # TODO(adriant): same as above.
-            regex = re.compile('[^a-zA-Z]')
-            project_name = "%s-%s" % (
-                regex.sub('', self.first_name.replace(' ', '-')),
-                regex.sub('', self.last_name.replace(' ', '-')))
+            project_name = str(
+                slugify("%s-%s" % (self.first_name, self.last_name)))
 
         # Now lowercase the name and set it to cache
         self.set_cache('project_name', project_name.lower())
