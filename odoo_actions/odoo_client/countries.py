@@ -21,7 +21,7 @@ class CountryManager(BaseManager):
         self.client = odooclient
         self.resource_env = self.client._Country
 
-    def fuzzy_match(self, name, threshold=0.8):
+    def fuzzy_match(self, code, threshold=0.8):
         """Will find near matches
 
         Returns: list(dict())
@@ -31,7 +31,7 @@ class CountryManager(BaseManager):
         """
 
         search = [
-            ('name', '=ilike', name)
+            ('code', '=ilike', code)
         ]
 
         # Should be a server side call to:
@@ -50,7 +50,7 @@ class CountryManager(BaseManager):
 
         return matches
 
-    def get_closest_country(self, name):
-        matches = self.fuzzy_match(name)
+    def get_closest_country(self, code):
+        matches = self.fuzzy_match(code)
 
         return self.get(matches[0]['id'])[0]

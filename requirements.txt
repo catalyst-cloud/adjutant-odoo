@@ -1,1 +1,2 @@
 odoorpc>=0.5.1
+django-countries>=4.6.1

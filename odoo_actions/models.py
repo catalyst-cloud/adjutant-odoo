@@ -20,29 +20,32 @@ from odoo_actions.utils import generate_short_id
 from adjutant.actions.v1.models import register_action_class
 from adjutant.actions.v1.base import BaseAction
 from adjutant.actions.v1.projects import NewProjectWithUserAction
-from adjutant.actions import user_store
+from adjutant.common import user_store
 from odoo_actions.serializers import (
     NewClientSignUpActionSerializer, NewProjectSignUpActionSerializer)
 
 
 class NewClientSignUpAction(BaseAction):
     """"""
-
-    required = [
+    individual_required = [
         'signup_type',
-        'first_name',
-        'last_name',
+        'name',
         'email',
         'phone',
+        'bill_address_1',
+        'bill_address_2',
+        'bill_city',
+        'bill_postal_code',
+        'bill_country',
         'discount_code',
         'payment_method',
+        'stripe_token',
         'toc_agreed',
     ]
 
     organisation_required = [
         'signup_type',
-        'first_name',
-        'last_name',
+        'name',
         'email',
         'phone',
         'company_name',
@@ -52,9 +55,9 @@ class NewClientSignUpAction(BaseAction):
         'postal_code',
         'country',
         'payment_method',
+        'stripe_token',
         'primary_contact_is_billing',
-        'bill_first_name',
-        'bill_last_name',
+        'bill_name',
         'bill_email',
         'bill_phone',
         'primary_address_is_billing',
@@ -69,15 +72,21 @@ class NewClientSignUpAction(BaseAction):
 
     def __init__(self, data, **kwargs):
         if data['signup_type'] == 'organisation':
-            self.required = self.organisation_required
+            self.required = list(self.organisation_required)
+        else:
+            self.required = list(self.individual_required)
 
         super(NewClientSignUpAction, self).__init__(data, **kwargs)
 
-        cloud_tag_id = self.settings.get("cloud_tag_id", {})
-        if cloud_tag_id:
-            self.cloud_tag_id = int(cloud_tag_id)
-        else:
-            self.cloud_tag_id = None
+        self.cloud_tag_id = self.settings.get("cloud_tag_id", None)
+        if self.cloud_tag_id:
+            self.cloud_tag_id = int(self.cloud_tag_id)
+
+        self.non_fiscal_position_countries = self.settings.get(
+            "non_fiscal_position_countries", ['NZ'])
+        self.fiscal_position_id = self.settings.get("fiscal_position_id", None)
+        if self.fiscal_position_id:
+            self.fiscal_position_id = int(self.fiscal_position_id)
 
     # Core action functions:
     def _pre_approve(self):
@@ -126,8 +135,7 @@ class NewClientSignUpAction(BaseAction):
             project_name = str(slugify(self.company_name))
         elif self.signup_type == "individual":
             # TODO(adriant): same as above.
-            project_name = str(
-                slugify("%s-%s" % (self.first_name, self.last_name)))
+            project_name = str(slugify(self.name))
 
         # Now lowercase the name and set it to cache
         self.set_cache('project_name', project_name.lower())
@@ -161,10 +169,17 @@ class NewClientSignUpAction(BaseAction):
             return
 
         if self.signup_type == "organisation":
-            self.action.valid = (self._validate_organisation() and
-                                 self._validate_countries_exists())
+            self.action.valid = all([
+                self._validate_organisation(),
+                self._validate_countries_exists(),
+                self._validate_payment_method(),
+            ])
         elif self.signup_type == "individual":
-            self.action.valid = self._validate_individual()
+            self.action.valid = all([
+                self._validate_individual(),
+                self._validate_countries_exists(),
+                self._validate_payment_method(),
+            ])
         self.action.save()
 
     def _validate_organisation(self):
@@ -204,6 +219,7 @@ class NewClientSignUpAction(BaseAction):
         odoo_client = get_odoo_client()
 
         company = odoo_client.partners.get(customer['id'])[0]
+
         tags = [tag.id for tag in company.category_id]
         if self.cloud_tag_id and self.cloud_tag_id in tags:
             self.add_note(
@@ -212,9 +228,8 @@ class NewClientSignUpAction(BaseAction):
             self.add_note(
                 "Company: %s does not have cloud tag." % customer['name'])
 
-        primary_name = "%s %s" % (self.first_name, self.last_name)
         contacts = odoo_client.partners.fuzzy_match(
-            name=primary_name, check_parent=True,
+            name=self.name, check_parent=True,
             parent=customer['id'])
 
         for contact in contacts:
@@ -228,9 +243,8 @@ class NewClientSignUpAction(BaseAction):
                     (contact['name'], customer['name']))
 
         if not self.primary_contact_is_billing:
-            billing_name = "%s %s" % (self.first_name, self.last_name)
             contacts = odoo_client.partners.fuzzy_match(
-                name=billing_name, check_parent=True,
+                name=self.bill_name, check_parent=True,
                 parent=customer['id'])
 
             for contact in contacts:
@@ -246,39 +260,39 @@ class NewClientSignUpAction(BaseAction):
     def _validate_individual(self):
         odoo_client = get_odoo_client()
 
-        # TODO(adrian): when odoo supports first/last change this:
         customers = odoo_client.partners.fuzzy_match(
-            name="%s %s" % (self.first_name, self.last_name),
+            name=self.name,
             check_parent=True)
         if len(customers) > 0:
             for customer in customers:
                 if customer['match'] == 1:
-                    self.add_note("Exact customer already exists: %s %s" % (
-                        self.first_name, self.last_name))
+                    self.add_note(
+                        "Exact customer already exists: %s" % self.name)
                 else:
-                    self.add_note("Similar customer already exists: %s %s" % (
-                        self.first_name, self.last_name))
+                    self.add_note(
+                        "Similar customer already exists: %s" % self.name)
 
-            self.customer_name = ("%s %s - (POSSIBLE DUPLICATE)" % (
-                self.first_name, self.last_name))
+            self.customer_name = ("%s - (POSSIBLE DUPLICATE)" % self.name)
             self.add_note(
                 "Rather than reuse existing will create duplicate as: '%s'" %
                 self.customer_name)
             return True
         else:
             self.add_note(
-                "No existing customer with name: %s %s" %
-                (self.first_name, self.last_name))
-            self.customer_name = ("%s %s" % (
-                self.first_name, self.last_name))
+                "No existing customer with name: %s" % self.name)
+            self.customer_name = ("%s" % self.name)
             return True
 
     def _validate_countries_exists(self):
-        if self.primary_address_is_billing:
-            return self._validate_primary_country()
+        self.set_fiscal_position = self._check_fiscal_position()
+        if self.signup_type == "organisation":
+            if self.primary_address_is_billing:
+                return self._validate_primary_country()
 
-        return (self._validate_primary_country() and
-                self._validate_billing_country())
+            return (self._validate_primary_country() and
+                    self._validate_billing_country())
+        elif self.signup_type == "individual":
+            return self._validate_billing_country()
 
     def _validate_billing_country(self):
         odooclient = get_odoo_client()
@@ -302,6 +316,44 @@ class NewClientSignUpAction(BaseAction):
             self.add_note("Did not find country %s" % self.country)
             return False
 
+    def _check_fiscal_position(self):
+        if self.signup_type == "organisation":
+            if self.primary_address_is_billing:
+                if self.country not in self.non_fiscal_position_countries:
+                    self.add_note(
+                        "Will set fiscal position for customer from %s"
+                        % self.country)
+                    return True
+            else:
+                if self.bill_country not in self.non_fiscal_position_countries:
+                    self.add_note(
+                        "Will set fiscal position for customer from %s"
+                        % self.bill_country)
+                    return True
+        elif self.signup_type == "individual":
+            if self.bill_country not in self.non_fiscal_position_countries:
+                self.add_note(
+                    "Will set fiscal position for customer from %s"
+                    % self.bill_country)
+                return True
+        return False
+
+    def _validate_payment_method(self):
+        if self.signup_type == "organisation":
+            if self.payment_method == "credit_card":
+                # TODO(adriant): check credit card details.
+                return False
+            else:
+                # Nothing to check with invoices
+                return True
+        elif self.signup_type == "individual":
+            if self.payment_method == "credit_card":
+                # TODO(adriant): check credit card details.
+                return False
+            else:
+                # Nothing to check with invoices
+                return False
+
     def _create_organisation(self):
         odoo_client = get_odoo_client()
 
@@ -313,15 +365,25 @@ class NewClientSignUpAction(BaseAction):
                 "Partner already created with id: %s." % partner_id)
         else:
             try:
-                tags = []
+                # TODO(adriant): store credit card somewhere
+                # and flag customer with credit payment type
+                partner_dict = {
+                    'is_company': True,
+                    'name': self.odoo_company_name,
+                    'street': self.address_1,
+                    'street2': self.address_2,
+                    'city': self.city,
+                    'zip': self.postal_code,
+                    'country_id': self.country_id,
+                    'phone': self.phone,
+                }
                 if self.cloud_tag_id:
-                    tags.append((6, 0, [self.cloud_tag_id]))
-                partner_id = odoo_client.partners.create(
-                    is_company=True, name=self.odoo_company_name,
-                    street=self.address_1, street2=self.address_2,
-                    city=self.city, zip=self.postal_code,
-                    country_id=self.country_id, phone=self.phone,
-                    category_id=tags)
+                    partner_dict['category_id'] = \
+                        [(6, 0, [self.cloud_tag_id])]
+                if self.set_fiscal_position:
+                    partner_dict['property_account_position'] = \
+                        self.fiscal_position_id
+                partner_id = odoo_client.partners.create(**partner_dict)
             except Exception as e:
                 self.add_note(
                     "Error: '%s' while setting up partner in Odoo." % e)
@@ -336,12 +398,10 @@ class NewClientSignUpAction(BaseAction):
             self.add_note("Primary contact already created.")
         else:
             try:
-                # TODO(adrian): when odoo supports first/last change this:
-                name = "%s %s" % (self.first_name, self.last_name)
                 if (self.primary_contact_is_billing and
                         not self.primary_address_is_billing):
                     primary_id = odoo_client.partners.create(
-                        is_company=False, name=name,
+                        is_company=False, name=self.name,
                         street=self.bill_address_1,
                         street2=self.bill_address_2,
                         city=self.bill_city, zip=self.bill_postal_code,
@@ -349,7 +409,7 @@ class NewClientSignUpAction(BaseAction):
                         phone=self.bill_phone, parent_id=partner_id)
                 else:
                     primary_id = odoo_client.partners.create(
-                        is_company=False, name=name,
+                        is_company=False, name=self.name,
                         email=self.email, phone=self.phone,
                         parent_id=partner_id,
                         use_parent_address=True)
@@ -359,7 +419,7 @@ class NewClientSignUpAction(BaseAction):
                     "primary contact in Odoo." % e)
                 raise
             self.set_cache('primary_id', primary_id)
-            self.add_note("Primary contact '%s' created." % name)
+            self.add_note("Primary contact '%s' created." % self.name)
         self.action.task.cache['primary_id'] = primary_id
 
         billing_id = self.get_cache('billing_id')
@@ -369,18 +429,15 @@ class NewClientSignUpAction(BaseAction):
             billing_id = primary_id
         elif not self.primary_contact_is_billing:
             try:
-                # TODO(adrian): when odoo supports first/last change this:
-                name = "%s %s" % (
-                    self.bill_first_name, self.bill_last_name)
                 if self.primary_address_is_billing:
                     billing_id = odoo_client.partners.create(
-                        is_company=False, name=name,
+                        is_company=False, name=self.bill_name,
                         email=self.email, phone=self.phone,
                         parent_id=partner_id,
                         use_parent_address=True)
                 else:
                     billing_id = odoo_client.partners.create(
-                        is_company=False, name=name,
+                        is_company=False, name=self.bill_name,
                         street=self.bill_address_1,
                         street2=self.bill_address_2,
                         city=self.bill_city, zip=self.bill_postal_code,
@@ -392,7 +449,7 @@ class NewClientSignUpAction(BaseAction):
                     "billing contact in Odoo." % e)
                 raise
             self.set_cache('billing_id', billing_id)
-            self.add_note("Billing contact '%s' created." % name)
+            self.add_note("Billing contact '%s' created." % self.name)
         self.action.task.cache['billing_id'] = billing_id
 
     def _create_individual(self):
@@ -403,13 +460,26 @@ class NewClientSignUpAction(BaseAction):
             self.add_note("Partner already created.")
         else:
             try:
-                tags = []
+                # TODO(adriant): store credit card somewhere
+                # and flag customer with credit payment type
+                partner_dict = {
+                    'is_company': False,
+                    'name': self.customer_name,
+                    'email': self.email,
+                    'phone': self.phone,
+                    'street': self.bill_address_1,
+                    'street2': self.bill_address_2,
+                    'city': self.bill_city,
+                    'zip': self.bill_postal_code,
+                    'country_id': self.bill_country_id,
+                }
                 if self.cloud_tag_id:
-                    tags.append((6, 0, [self.cloud_tag_id]))
-                partner_id = odoo_client.partners.create(
-                    is_company=False, name=self.customer_name,
-                    email=self.email, phone=self.phone,
-                    category_id=tags)
+                    partner_dict['category_id'] = \
+                        [(6, 0, [self.cloud_tag_id])]
+                if self.set_fiscal_position:
+                    partner_dict['property_account_position'] = \
+                        self.fiscal_position_id
+                partner_id = odoo_client.partners.create(**partner_dict)
             except Exception as e:
                 self.add_note(
                     "Error: '%s' while setting up partner in Odoo." % e)

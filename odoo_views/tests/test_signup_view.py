@@ -12,40 +12,37 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from rest_framework.test import APITestCase
-
 from rest_framework import status
 
 import mock
 
 from adjutant.api.models import Task, Token
-from adjutant.api.v1 import tests
-from adjutant.api.v1.tests import FakeManager, setup_temp_cache
+from adjutant.common.tests import fake_clients
+from adjutant.common.tests.fake_clients import (
+    FakeManager, setup_identity_cache)
+from adjutant.common.tests.utils import AdjutantAPITestCase
 
 from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
 
-class SignupViewTests(APITestCase):
+@mock.patch('adjutant.common.user_store.IdentityManager', FakeManager)
+@mock.patch('odoo_actions.models.get_odoo_client', get_odoo_client)
+class SignupViewTests(AdjutantAPITestCase):
 
     def setUp(self):
         setup_odoo_cache()
 
-    @mock.patch('adjutant.actions.user_store.IdentityManager',
-                FakeManager)
-    @mock.patch('odoo_actions.models.get_odoo_client',
-                get_odoo_client)
     def test_new_signup(self):
         """
         Ensure the new signup workflow goes as expected.
         """
-        setup_temp_cache({}, {})
+        setup_identity_cache()
 
         url = "/v1/openstack/sign-up"
 
         signup_data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
@@ -54,7 +51,7 @@ class SignupViewTests(APITestCase):
             'address_1': "a street",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
         }
         response = self.client.post(url, signup_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -89,16 +86,14 @@ class SignupViewTests(APITestCase):
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['company_name'])
 
-        primary_name = "%s %s" % (
-            signup_data['first_name'], signup_data['last_name'])
         odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
-            ('name', '=', primary_name)
+            ('name', '=', signup_data['name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
-        self.assertEquals(partners[0].name, primary_name)
+        self.assertEquals(partners[0].name, signup_data['name'])
 
         self.assertEquals(len(odoo_cache['projects']), 1)
         self.assertEquals(len(odoo_cache['project_rels']), 3)
@@ -109,30 +104,21 @@ class SignupViewTests(APITestCase):
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    @mock.patch('adjutant.actions.user_store.IdentityManager',
-                FakeManager)
-    @mock.patch('odoo_actions.models.get_odoo_client',
-                get_odoo_client)
     def test_new_signup_existing_project(self):
         """
         Ensure the new signup workflow goes as expected with
-        and existing project (but no existing company).
+        an existing project (but no existing company).
         """
 
-        project = mock.Mock()
-        project.id = 'test_project_id'
-        project.name = 'test_project'
-        project.domain = 'default'
-        project.roles = {}
+        project = fake_clients.FakeProject(name="jim-co")
 
-        setup_temp_cache({project.name: project}, {})
+        setup_identity_cache(projects=[project])
 
         url = "/v1/openstack/sign-up"
 
         signup_data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
@@ -141,7 +127,7 @@ class SignupViewTests(APITestCase):
             'address_1': "a street",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
         }
         response = self.client.post(url, signup_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -176,21 +162,27 @@ class SignupViewTests(APITestCase):
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['company_name'])
 
-        primary_name = "%s %s" % (
-            signup_data['first_name'], signup_data['last_name'])
         odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
-            ('name', '=', primary_name)
+            ('name', '=', signup_data['name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
-        self.assertEquals(partners[0].name, primary_name)
+        self.assertEquals(partners[0].name, signup_data['name'])
 
         self.assertEquals(len(odoo_cache['projects']), 1)
         self.assertEquals(len(odoo_cache['project_rels']), 3)
 
-        self.assertEquals(len(tests.temp_cache['projects']), 2)
+        self.assertEquals(
+            len(fake_clients.identity_cache['new_projects']), 1)
+
+        self.assertTrue(
+            fake_clients.identity_cache['new_projects'][0].name.startswith(
+                project.name))
+        self.assertNotEquals(
+            fake_clients.identity_cache['new_projects'][0].name,
+            project.name)
 
         new_token = Token.objects.all()[0]
         url = "/v1/tokens/" + new_token.token

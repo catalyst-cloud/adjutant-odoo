@@ -13,30 +13,44 @@
 #    under the License.
 
 import mock
+from unittest import skip
 
 from odoo_actions.models import (
     NewClientSignUpAction, NewProjectSignUpAction)
 from adjutant.api.models import Task
-from adjutant.api.v1 import tests
-from adjutant.api.v1.tests import (
-    FakeManager, setup_temp_cache, modify_dict_settings, AdjutantTestCase)
+from adjutant.common.tests import fake_clients
+from adjutant.common.tests.utils import (
+     modify_dict_settings, AdjutantTestCase)
+from adjutant.common.tests.fake_clients import (
+    FakeManager, setup_identity_cache)
 
 from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
 
+@mock.patch('odoo_actions.models.get_odoo_client', get_odoo_client)
+@modify_dict_settings(
+    DEFAULT_ACTION_SETTINGS={
+        'key_list': ['NewClientSignUpAction'],
+        'operation': 'override',
+        'value': {
+            'cloud_tag_id': 1,
+            'non_fiscal_position_countries': ['NZ'],
+            'fiscal_position_id': 1,
+         }
+    })
 class SignupActionTests(AdjutantTestCase):
 
     def setUp(self):
         setup_odoo_cache()
 
-    @mock.patch('odoo_actions.models.get_odoo_client',
-                get_odoo_client)
     def test_new_customer(self):
         """
         Test the default case, all valid.
         No existing customer. Primary is billing.
 
         Should create two partners.
+
+        Country NZ, so no fiscal position.
         """
         task = Task.objects.create(
             ip_address="0.0.0.0",
@@ -44,21 +58,20 @@ class SignupActionTests(AdjutantTestCase):
 
         data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
+            'stripe_token': '',
             'toc_agreed': 'true',
             'company_name': 'Jim-co',
             'address_1': "a street",
             'address_2': "",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
             'primary_contact_is_billing': True,
-            'bill_first_name': '',
-            'bill_last_name': '',
+            'bill_name': '',
             'bill_email': '',
             'bill_phone': '',
             'primary_address_is_billing': True,
@@ -87,28 +100,28 @@ class SignupActionTests(AdjutantTestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, data['company_name'])
+        self.assertEquals(partners[0].property_account_position, None)
 
-        primary_name = "%s %s" % (data['first_name'], data['last_name'])
         odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
-            ('name', '=', primary_name)
+            ('name', '=', data['name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
-        self.assertEquals(partners[0].name, primary_name)
+        self.assertEquals(partners[0].name, data['name'])
 
         action.submit({})
         self.assertEquals(action.valid, True)
 
-    @mock.patch('odoo_actions.models.get_odoo_client',
-                get_odoo_client)
     def test_new_customer_billing_contact(self):
         """
         Test the second default case, all valid.
         No existing customer. Primary is not billing.
 
         Should create 3 partners.
+
+        Billing address is in AU so fiscal position should be set.
         """
         task = Task.objects.create(
             ip_address="0.0.0.0",
@@ -116,21 +129,20 @@ class SignupActionTests(AdjutantTestCase):
 
         data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
+            'stripe_token': '',
             'toc_agreed': 'true',
             'company_name': 'Jim-co',
             'address_1': "a street",
             'address_2': "",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
             'primary_contact_is_billing': False,
-            'bill_first_name': 'Oz',
-            'bill_last_name': 'Great and Powerful',
+            'bill_name': 'Oz the Great and Powerful',
             'bill_email': 'oz@em.oz',
             'bill_phone': '123456',
             'primary_address_is_billing': False,
@@ -138,7 +150,7 @@ class SignupActionTests(AdjutantTestCase):
             'bill_address_2': '',
             'bill_city': 'emerald city',
             'bill_postal_code': 'NW1',
-            'bill_country': 'Oz',
+            'bill_country': 'AU',
             'discount_code': '',
         }
 
@@ -159,33 +171,29 @@ class SignupActionTests(AdjutantTestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, data['company_name'])
+        self.assertEquals(partners[0].property_account_position, 1)
 
-        primary_name = "%s %s" % (data['first_name'], data['last_name'])
         odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
-            ('name', '=', primary_name)
+            ('name', '=', data['name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
-        self.assertEquals(partners[0].name, primary_name)
+        self.assertEquals(partners[0].name, data['name'])
 
-        billing_name = "%s %s" % (
-            data['bill_first_name'], data['bill_last_name'])
         odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
-            ('name', '=', billing_name)
+            ('name', '=', data['bill_name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
-        self.assertEquals(partners[0].name, billing_name)
+        self.assertEquals(partners[0].name, data['bill_name'])
 
         action.submit({})
         self.assertEquals(action.valid, True)
 
-    @mock.patch('odoo_actions.models.get_odoo_client',
-                get_odoo_client)
     def test_new_customer_duplicate(self):
         """
         Test the duplicate case, all valid.
@@ -205,21 +213,20 @@ class SignupActionTests(AdjutantTestCase):
 
         data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
+            'stripe_token': '',
             'toc_agreed': 'true',
             'company_name': 'Jim-co',
             'address_1': "a street",
             'address_2': "",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
             'primary_contact_is_billing': True,
-            'bill_first_name': '',
-            'bill_last_name': '',
+            'bill_name': '',
             'bill_email': '',
             'bill_phone': '',
             'primary_address_is_billing': True,
@@ -250,21 +257,128 @@ class SignupActionTests(AdjutantTestCase):
             '(POSSIBLE DUPLICATE)' in partners[0].name or
             '(POSSIBLE DUPLICATE)' in partners[1].name)
 
-        primary_name = "%s %s" % (data['first_name'], data['last_name'])
         odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
-            ('name', '=', primary_name)
+            ('name', '=', data['name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 2)
-        self.assertEquals(partners[0].name, primary_name)
-        self.assertEquals(partners[1].name, primary_name)
+        self.assertEquals(partners[0].name, data['name'])
+        self.assertEquals(partners[1].name, data['name'])
+
+        action.submit({})
+        self.assertEquals(action.valid, True)
+
+    @skip("Not applicable yet.")
+    def test_new_customer_individual(self):
+        """
+        Test individual.
+        No existing customer.
+
+        Should create 1 partner.
+
+        Fiscal position is not set because in NZ.
+        """
+        task = Task.objects.create(
+            ip_address="0.0.0.0",
+            keystone_user={})
+
+        data = {
+            'signup_type': 'individual',
+            'name': 'jim james',
+            'email': 'jim@jim.jim',
+            'phone': '123456',
+            'payment_method': 'credit_card',
+            'stripe_token': 'some_credit_token',
+            'toc_agreed': 'true',
+            'bill_address_1': 'yellow brick road',
+            'bill_address_2': '',
+            'bill_city': 'emerald city',
+            'bill_postal_code': 'NW1',
+            'bill_country': 'NZ',
+            'discount_code': '',
+        }
+
+        action = NewClientSignUpAction(data, task=task, order=1)
+
+        action.pre_approve()
+        self.assertEquals(action.valid, True)
+
+        action.post_approve()
+        self.assertEquals(action.valid, True)
+        self.assertEquals(len(odoo_cache['partners']), 1)
+
+        odooclient = get_odoo_client()
+        search = [
+            ('is_company', '=', False),
+            ('name', '=', data['name'])
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 1)
+        self.assertEquals(partners[0].name, data['name'])
+        self.assertEquals(partners[0].country_id, 3)
+        self.assertEquals(partners[0].property_account_position, None)
+
+        action.submit({})
+        self.assertEquals(action.valid, True)
+
+    @skip("Not applicable yet.")
+    def test_new_customer_individual_fiscal_position(self):
+        """
+        Test individual.
+        No existing customer.
+
+        Should create 1 partner.
+
+        Fiscal position is set because not in NZ.
+        """
+        task = Task.objects.create(
+            ip_address="0.0.0.0",
+            keystone_user={})
+
+        data = {
+            'signup_type': 'individual',
+            'name': 'jim james',
+            'email': 'jim@jim.jim',
+            'phone': '123456',
+            'payment_method': 'credit_card',
+            'stripe_token': 'some_credit_token',
+            'toc_agreed': 'true',
+            'bill_address_1': 'yellow brick road',
+            'bill_address_2': '',
+            'bill_city': 'emerald city',
+            'bill_postal_code': 'NW1',
+            'bill_country': 'AU',
+            'discount_code': '',
+        }
+
+        action = NewClientSignUpAction(data, task=task, order=1)
+
+        action.pre_approve()
+        self.assertEquals(action.valid, True)
+
+        action.post_approve()
+        self.assertEquals(action.valid, True)
+        self.assertEquals(len(odoo_cache['partners']), 1)
+
+        odooclient = get_odoo_client()
+        search = [
+            ('is_company', '=', False),
+            ('name', '=', data['name'])
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 1)
+        self.assertEquals(partners[0].name, data['name'])
+        self.assertEquals(partners[0].country_id, 4)
+        self.assertEquals(partners[0].property_account_position, 1)
 
         action.submit({})
         self.assertEquals(action.valid, True)
 
 
+@mock.patch('adjutant.common.user_store.IdentityManager', FakeManager)
+@mock.patch('odoo_actions.models.get_odoo_client', get_odoo_client)
 @modify_dict_settings(
     DEFAULT_ACTION_SETTINGS={
         'key_list': ['NewProjectSignUpAction'],
@@ -283,10 +397,6 @@ class NewProjectSignUpActionTests(AdjutantTestCase):
     def setUp(self):
         setup_odoo_cache()
 
-    @mock.patch('adjutant.actions.user_store.IdentityManager',
-                FakeManager)
-    @mock.patch('odoo_actions.models.get_odoo_client',
-                get_odoo_client)
     def test_new_project_signup(self):
         """
         Base case, no project, no user.
@@ -297,7 +407,7 @@ class NewProjectSignUpActionTests(AdjutantTestCase):
         user password at submit step.
         """
 
-        setup_temp_cache({}, {})
+        setup_identity_cache()
 
         task = Task.objects.create(
             ip_address="0.0.0.0",
@@ -330,25 +440,23 @@ class NewProjectSignUpActionTests(AdjutantTestCase):
 
         self.assertEquals(action.valid, True)
         self.assertEquals(
-            tests.temp_cache['projects']['test_project'].name,
+            fake_clients.identity_cache['new_projects'][0].name,
             'test_project')
 
         token_data = {'password': '123456'}
         action.submit(token_data)
         self.assertEquals(action.valid, True)
+
+        new_project = fake_clients.identity_cache['new_projects'][0]
+        new_user = fake_clients.identity_cache['new_users'][0]
+        self.assertEquals(new_user.email, 'test@example.com')
+        fake_client = fake_clients.FakeManager()
+        roles = fake_client._get_roles_as_names(new_user, new_project)
         self.assertEquals(
-            tests.temp_cache['users']["user_id_1"].email,
-            'test@example.com')
-        project = tests.temp_cache['projects']['test_project']
-        self.assertEquals(
-            sorted(project.roles["user_id_1"]),
+            sorted(roles),
             sorted(['_member_', 'project_admin',
                     'project_mod', 'heat_stack_owner']))
 
-    @mock.patch('adjutant.actions.user_store.IdentityManager',
-                FakeManager)
-    @mock.patch('odoo_actions.models.get_odoo_client',
-                get_odoo_client)
     def test_new_project_signup_existing(self):
         """
         Existing project case, existing project, no user.
@@ -363,13 +471,9 @@ class NewProjectSignUpActionTests(AdjutantTestCase):
         and thus avoid the conflict entirely.
         """
 
-        project = mock.Mock()
-        project.id = 'test_project_id'
-        project.name = 'test_project'
-        project.domain = 'default'
-        project.roles = {}
+        project = fake_clients.FakeProject(name="test_project")
 
-        setup_temp_cache({project.name: project}, {})
+        setup_identity_cache(projects=[project])
 
         task = Task.objects.create(
             ip_address="0.0.0.0",
@@ -402,18 +506,20 @@ class NewProjectSignUpActionTests(AdjutantTestCase):
 
         self.assertEquals(action.valid, True)
         self.assertEquals(
-            len(tests.temp_cache['projects']), 2)
+            len(fake_clients.identity_cache['new_projects']), 1)
         self.assertNotEquals(
             action.project_name, 'test_project')
 
         token_data = {'password': '123456'}
         action.submit(token_data)
         self.assertEquals(action.valid, True)
+
+        new_project = fake_clients.identity_cache['new_projects'][0]
+        new_user = fake_clients.identity_cache['new_users'][0]
+        self.assertEquals(new_user.email, 'test@example.com')
+        fake_client = fake_clients.FakeManager()
+        roles = fake_client._get_roles_as_names(new_user, new_project)
         self.assertEquals(
-            tests.temp_cache['users']["user_id_1"].email,
-            'test@example.com')
-        project = tests.temp_cache['projects'][action.project_name]
-        self.assertEquals(
-            sorted(project.roles["user_id_1"]),
+            sorted(roles),
             sorted(['_member_', 'project_admin',
                     'project_mod', 'heat_stack_owner']))

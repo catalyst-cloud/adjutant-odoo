@@ -19,6 +19,17 @@ class OdooObject(object):
             country_id = fields.pop('country_id')
             self.country_id = OdooObject(
                 odoo_cache['countries'][country_id])
+        if 'category_id' in fields:
+            category_id = fields.pop('category_id')
+            if (category_id and type(category_id) == list and
+                    type(category_id[0]) == tuple):
+                self.category_id = [
+                    OdooObject(odoo_cache['tags'][tag])
+                    for tag in category_id[0][2]
+                ]
+            else:
+                self.category_id = category_id
+
         self.__dict__.update(fields)
 
     def __setattr__(self, name, value):
@@ -130,15 +141,15 @@ class FakePartnerManager(FakeOdooResourceManager):
 
 class FakeCountryManager(FakeOdooResourceManager):
 
-    def fuzzy_match(self, name):
+    def fuzzy_match(self, code):
         search = [
-            ('name', '=', name)
+            ('code', '=', code)
         ]
 
         return self.list(search)
 
-    def get_closest_country(self, name):
-        return self.fuzzy_match(name)[0]
+    def get_closest_country(self, code):
+        return self.fuzzy_match(code)[0]
 
 
 class FakeOdooClient(object):
@@ -149,6 +160,7 @@ class FakeOdooClient(object):
         self.partners = FakePartnerManager("partners")
         self.project_relationships = FakeOdooResourceManager("project_rels")
         self.countries = FakeCountryManager("countries")
+        self.tags = FakeOdooResourceManager("tags")
         self._odoo = MagicMock()
 
 
@@ -160,10 +172,13 @@ def setup_odoo_cache():
         'partners': {},
         'project_rels': {},
         'countries': {
-            1: {'name': 'Rivendell', 'id': 1},
-            2: {'name': 'The Shire', 'id': 2},
-            3: {'name': 'nz', 'id': 3},
-            4: {'name': 'Oz', 'id': 4}
+            1: {'code': 'RD', 'id': 1},
+            2: {'code': 'SH', 'id': 2},
+            3: {'code': 'NZ', 'id': 3},
+            4: {'code': 'AU', 'id': 4}
+        },
+        'tags': {
+            1: {'name': 'cloud tag', 'id': 1},
         }
     })
 

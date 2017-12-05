@@ -24,8 +24,7 @@ class SignupSerializerTests(TestCase):
 
         data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
@@ -45,8 +44,7 @@ class SignupSerializerTests(TestCase):
 
         data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
@@ -55,7 +53,7 @@ class SignupSerializerTests(TestCase):
             'address_1': "a street",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
 
         }
         serializer = NewClientSignUpActionSerializer(data=data)
@@ -67,8 +65,7 @@ class SignupSerializerTests(TestCase):
 
         data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
@@ -77,7 +74,7 @@ class SignupSerializerTests(TestCase):
             'address_1': "a street",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
             'primary_contact_is_billing': 'false',
             'primary_address_is_billing': 'false',
 
@@ -87,7 +84,7 @@ class SignupSerializerTests(TestCase):
         self.assertEqual(
             serializer.errors['non_field_errors'],
             ["These fields are required for organisations: " +
-             "['bill_first_name', 'bill_last_name', 'bill_email', " +
+             "['bill_name', 'bill_email', " +
              "'bill_phone', 'bill_address_1', 'bill_city', " +
              "'bill_postal_code', 'bill_country']"]
         )
@@ -98,8 +95,7 @@ class SignupSerializerTests(TestCase):
 
         data = {
             'signup_type': 'organisation',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
             'payment_method': 'invoice',
@@ -108,17 +104,16 @@ class SignupSerializerTests(TestCase):
             'address_1': "a street",
             'city': 'some city',
             'postal_code': 'NW1',
-            'country': 'nz',
+            'country': 'NZ',
             'primary_contact_is_billing': 'false',
-            'bill_first_name': 'Oz',
-            'bill_last_name': 'Great and Powerful',
+            'bill_name': 'Oz the Great and Powerful',
             'bill_email': 'oz@em.oz',
             'bill_phone': '123456',
             'primary_address_is_billing': 'false',
             'bill_address_1': 'yellow brick road',
             'bill_city': 'emerald city',
             'bill_postal_code': 'NW1',
-            'bill_country': 'Oz'
+            'bill_country': 'AU'
 
         }
         serializer = NewClientSignUpActionSerializer(data=data)
@@ -130,11 +125,15 @@ class SignupSerializerTests(TestCase):
 
         data = {
             'signup_type': 'individual',
-            'first_name': 'jim',
-            'last_name': 'james',
+            'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
+            'stripe_token': "tok_stuff",
             'toc_agreed': 'true',
+            'bill_address_1': 'yellow brick road',
+            'bill_city': 'emerald city',
+            'bill_postal_code': 'NW1',
+            'bill_country': 'AU'
 
         }
         serializer = NewClientSignUpActionSerializer(data=data)

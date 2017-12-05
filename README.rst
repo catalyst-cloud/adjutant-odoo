@@ -39,14 +39,22 @@ You will also need to add some taskview settings for the new signups view:
                 EmailNotification:
                     emails:
                         - signups@example.com
-                RTNotification:
-                    queue: signups
             error:
                 EmailNotification:
                     emails:
                         - signups@example.com
-                RTNotification:
-                    queue: signups
+        action_settings:
+            NewClientSignUpAction:
+                cloud_tag_id: 1
+                non_fiscal_position_countries:
+                    - NZ
+                fiscal_position_id: 1
+            NewProjectSignUpAction:
+                default_roles:
+                    - project_admin
+                    - project_mod
+                    - heat_stack_owner
+                    - _member_
         default_region: RegionOne
         # If 'None' (null in yaml), will default to domain as parent.
         # If domain isn't set explicity, will use Adjutant's admin user domain.

@@ -16,6 +16,8 @@
 from adjutant.actions.v1.serializers import BaseUserNameSerializer
 from rest_framework import serializers
 
+from django_countries import countries
+
 
 class NewClientSignUpActionSerializer(serializers.Serializer):
 
@@ -23,8 +25,7 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
         choices=['individual', 'organisation'])
 
     # Indidividual or organisation
-    first_name = serializers.CharField(max_length=100)
-    last_name = serializers.CharField(max_length=100)
+    name = serializers.CharField(max_length=200)
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=100)
     toc_agreed = serializers.BooleanField()
@@ -32,6 +33,8 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
         max_length=100, default="", allow_blank=True)
     payment_method = serializers.ChoiceField(
         choices=['invoice', 'credit_card'], default='credit_card')
+    stripe_token = serializers.CharField(
+        max_length=100, default="", allow_blank=True)
 
     # organisation details
     company_name = serializers.CharField(
@@ -43,14 +46,12 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
     city = serializers.CharField(max_length=100, default="", allow_blank=True)
     postal_code = serializers.CharField(
         max_length=100, default="", allow_blank=True)
-    country = serializers.CharField(
-        max_length=100, default="", allow_blank=True)
+    country = serializers.ChoiceField(
+        choices=countries, default="", allow_blank=True)
 
     primary_contact_is_billing = serializers.BooleanField(default=True)
-    bill_first_name = serializers.CharField(
-        max_length=100, default="", allow_blank=True)
-    bill_last_name = serializers.CharField(
-        max_length=100, default="", allow_blank=True)
+    bill_name = serializers.CharField(
+        max_length=200, default="", allow_blank=True)
     bill_email = serializers.EmailField(default="", allow_blank=True)
     bill_phone = serializers.CharField(
         max_length=100, default="", allow_blank=True)
@@ -64,8 +65,8 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
         max_length=100, default="", allow_blank=True)
     bill_postal_code = serializers.CharField(
         max_length=100, default="", allow_blank=True)
-    bill_country = serializers.CharField(
-        max_length=100, default="", allow_blank=True)
+    bill_country = serializers.ChoiceField(
+        choices=countries, default="", allow_blank=True)
 
     def _check_field(self, errors, field, data):
         value = data.get(field)
@@ -79,11 +80,11 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
 
             missing_fields = []
 
-            self._check_field(missing_fields, 'payment_method', data)
+            payment_method = self._check_field(
+                missing_fields, 'payment_method', data)
             self._check_field(missing_fields, 'company_name', data)
 
-            self._check_field(missing_fields, 'first_name', data)
-            self._check_field(missing_fields, 'last_name', data)
+            self._check_field(missing_fields, 'name', data)
             self._check_field(missing_fields, 'email', data)
             self._check_field(missing_fields, 'phone', data)
             self._check_field(missing_fields, 'address_1', data)
@@ -95,11 +96,12 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
             primary_contact_is_billing = data.get('primary_contact_is_billing')
             primary_address_is_billing = data.get('primary_address_is_billing')
 
+            if payment_method == 'credit_card':
+                self._check_field(missing_fields, 'stripe_token', data)
+
             if not primary_contact_is_billing:
                 self._check_field(
-                    missing_fields, 'bill_first_name', data)
-                self._check_field(
-                    missing_fields, 'bill_last_name', data)
+                    missing_fields, 'bill_name', data)
                 self._check_field(
                     missing_fields, 'bill_email', data)
                 self._check_field(
@@ -118,6 +120,31 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
             if missing_fields:
                 raise serializers.ValidationError(
                     "These fields are required for organisations: %s" %
+                    missing_fields)
+
+        else:
+            missing_fields = []
+
+            if data.get('payment_method') != 'credit_card':
+                raise serializers.ValidationError(
+                    "Indidividuals can only pay by credit card.")
+
+            if not data.get('stripe_token'):
+                raise serializers.ValidationError(
+                    "Must provide a stripe token.")
+
+            self._check_field(
+                missing_fields, 'bill_address_1', data)
+            self._check_field(
+                missing_fields, 'bill_city', data)
+            self._check_field(
+                missing_fields, 'bill_postal_code', data)
+            self._check_field(
+                missing_fields, 'bill_country', data)
+
+            if missing_fields:
+                raise serializers.ValidationError(
+                    "These fields are required for individuals: %s" %
                     missing_fields)
 
         if not data['toc_agreed']:
