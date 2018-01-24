@@ -22,6 +22,7 @@ from adjutant.common.tests.fake_clients import (
     FakeManager, setup_identity_cache)
 from adjutant.common.tests.utils import AdjutantAPITestCase
 
+from odoo_actions.models import DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME
 from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
 
@@ -86,7 +87,6 @@ class SignupViewTests(AdjutantAPITestCase):
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['company_name'])
 
-        odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
             ('name', '=', signup_data['name'])
@@ -94,6 +94,13 @@ class SignupViewTests(AdjutantAPITestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['name'])
+
+        search = [
+            ('is_company', '=', False),
+            ('name', '=', DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 0)
 
         self.assertEquals(len(odoo_cache['projects']), 1)
         self.assertEquals(len(odoo_cache['project_rels']), 3)
@@ -162,7 +169,6 @@ class SignupViewTests(AdjutantAPITestCase):
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['company_name'])
 
-        odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
             ('name', '=', signup_data['name'])
@@ -170,6 +176,13 @@ class SignupViewTests(AdjutantAPITestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['name'])
+
+        search = [
+            ('is_company', '=', False),
+            ('name', '=', DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 0)
 
         self.assertEquals(len(odoo_cache['projects']), 1)
         self.assertEquals(len(odoo_cache['project_rels']), 3)

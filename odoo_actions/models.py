@@ -25,6 +25,9 @@ from odoo_actions.serializers import (
     NewClientSignUpActionSerializer, NewProjectSignUpActionSerializer)
 
 
+DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME = "Physical Address"
+
+
 class NewClientSignUpAction(BaseAction):
     """"""
     individual_required = [
@@ -78,6 +81,13 @@ class NewClientSignUpAction(BaseAction):
 
         super(NewClientSignUpAction, self).__init__(data, **kwargs)
 
+        self.physical_address_contact_name = self.settings.get(
+            "physical_address_contact_name",
+            DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
+        if not self.physical_address_contact_name:
+            self.physical_address_contact_name = \
+                DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME
+
         self.cloud_tag_id = self.settings.get("cloud_tag_id", None)
         if self.cloud_tag_id:
             self.cloud_tag_id = int(self.cloud_tag_id)
@@ -125,10 +135,6 @@ class NewClientSignUpAction(BaseAction):
 
         The name needs to be a lowercase slug "[^0-9a-z_-]"
         """
-        project_name = self.get_cache('project_name')
-        if project_name:
-            return project_name
-
         if self.signup_type == "organisation":
             # TODO(adriant): One option later may be to allow unicode:
             # slugify(value, allow_unicode=True)
@@ -136,9 +142,6 @@ class NewClientSignUpAction(BaseAction):
         elif self.signup_type == "individual":
             # TODO(adriant): same as above.
             project_name = str(slugify(self.name))
-
-        # Now lowercase the name and set it to cache
-        self.set_cache('project_name', project_name.lower())
 
         return project_name
 
@@ -370,13 +373,25 @@ class NewClientSignUpAction(BaseAction):
                 partner_dict = {
                     'is_company': True,
                     'name': self.odoo_company_name,
-                    'street': self.address_1,
-                    'street2': self.address_2,
-                    'city': self.city,
-                    'zip': self.postal_code,
-                    'country_id': self.country_id,
-                    'phone': self.phone,
                 }
+                if self.primary_contact_is_billing:
+                    partner_dict['email'] = self.email
+                else:
+                    partner_dict['email'] = self.bill_email
+
+                if self.primary_address_is_billing:
+                    partner_dict['street'] = self.address_1
+                    partner_dict['street2'] = self.address_2
+                    partner_dict['city'] = self.city
+                    partner_dict['zip'] = self.postal_code
+                    partner_dict['country_id'] = self.country_id
+                else:
+                    partner_dict['street'] = self.bill_address_1
+                    partner_dict['street2'] = self.bill_address_2
+                    partner_dict['city'] = self.bill_city
+                    partner_dict['zip'] = self.bill_postal_code
+                    partner_dict['country_id'] = self.bill_country_id
+
                 if self.cloud_tag_id:
                     partner_dict['category_id'] = \
                         [(6, 0, [self.cloud_tag_id])]
@@ -392,27 +407,41 @@ class NewClientSignUpAction(BaseAction):
             self.add_note("Partner '%s' created." % self.odoo_company_name)
         self.action.task.cache['partner_id'] = partner_id
 
+        if not self.primary_address_is_billing:
+            physical_address_id = self.get_cache('physical_address_id')
+            if physical_address_id:
+                self.add_note("Physical address contact already created.")
+            else:
+                try:
+                    physical_address_id = odoo_client.partners.create(
+                        is_company=False,
+                        name=self.physical_address_contact_name,
+                        street=self.address_1,
+                        street2=self.address_2,
+                        city=self.city, zip=self.postal_code,
+                        country_id=self.country_id,
+                        parent_id=partner_id)
+                except Exception as e:
+                    self.add_note(
+                        "Error: '%s' while setting up "
+                        "physical address contact in Odoo." % e)
+                    raise
+                self.set_cache('physical_address_id', physical_address_id)
+                self.add_note("Physical address contact '%s' created." %
+                              self.physical_address_contact_name)
+            self.action.task.cache['physical_address_id'] = physical_address_id
+
         # Now we handle the primary contact for the new project:
         primary_id = self.get_cache('primary_id')
         if primary_id:
             self.add_note("Primary contact already created.")
         else:
             try:
-                if (self.primary_contact_is_billing and
-                        not self.primary_address_is_billing):
-                    primary_id = odoo_client.partners.create(
-                        is_company=False, name=self.name,
-                        street=self.bill_address_1,
-                        street2=self.bill_address_2,
-                        city=self.bill_city, zip=self.bill_postal_code,
-                        country_id=self.bill_country_id,
-                        phone=self.bill_phone, parent_id=partner_id)
-                else:
-                    primary_id = odoo_client.partners.create(
-                        is_company=False, name=self.name,
-                        email=self.email, phone=self.phone,
-                        parent_id=partner_id,
-                        use_parent_address=True)
+                primary_id = odoo_client.partners.create(
+                    is_company=False, name=self.name,
+                    email=self.email, phone=self.phone,
+                    parent_id=partner_id,
+                    use_parent_address=True)
             except Exception as e:
                 self.add_note(
                     "Error: '%s' while setting up "
@@ -429,27 +458,16 @@ class NewClientSignUpAction(BaseAction):
             billing_id = primary_id
         elif not self.primary_contact_is_billing:
             try:
-                if self.primary_address_is_billing:
-                    billing_id = odoo_client.partners.create(
-                        is_company=False, name=self.bill_name,
-                        email=self.email, phone=self.phone,
-                        parent_id=partner_id,
-                        use_parent_address=True)
-                else:
-                    billing_id = odoo_client.partners.create(
-                        is_company=False, name=self.bill_name,
-                        street=self.bill_address_1,
-                        street2=self.bill_address_2,
-                        city=self.bill_city, zip=self.bill_postal_code,
-                        country_id=self.bill_country_id,
-                        phone=self.bill_phone, parent_id=partner_id)
+                billing_id = odoo_client.partners.create(
+                    is_company=False, name=self.bill_name,
+                    email=self.bill_email, parent_id=partner_id)
             except Exception as e:
                 self.add_note(
                     "Error: '%s' while setting up "
                     "billing contact in Odoo." % e)
                 raise
             self.set_cache('billing_id', billing_id)
-            self.add_note("Billing contact '%s' created." % self.name)
+            self.add_note("Billing contact '%s' created." % self.bill_name)
         self.action.task.cache['billing_id'] = billing_id
 
     def _create_individual(self):
@@ -501,53 +519,60 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
         'domain_id',
     ]
 
-    def _validate_project_absent(self):
-        project_name = self.get_cache('project_name')
+    def _make_safe_project_name(self):
+        project_name = self.action.task.cache.get('project_name')
         if not project_name:
-            project_name = self.action.task.cache.get('project_name')
-            if not project_name:
-                self.add_note("No project_name has been set.")
-                return False
+            self.add_note("No project_name has been set.")
+            return False
 
-            id_manager = user_store.IdentityManager()
+        id_manager = user_store.IdentityManager()
 
-            project = id_manager.find_project(
-                project_name, self.domain_id)
-            if project:
-                self.add_note("Existing project with name '%s'." %
-                              project_name)
-                self.add_note("Attempting to find unique project name to use.")
+        project = id_manager.find_project(
+            project_name, self.domain_id)
+        if project:
+            self.add_note("Existing project with name '%s'." %
+                          project_name)
+            self.add_note("Attempting to find unique project name to use.")
 
-                # NOTE(adriant) Mainly to avoid doing a while True loop, or it
-                # taking too long.
-                name_attempts = 20
-                found_new_name = False
+            # NOTE(adriant) Mainly to avoid doing a while True loop, or it
+            # taking too long.
+            name_attempts = 20
+            found_new_name = False
 
-                for i in range(name_attempts):
-                    ran_hash = generate_short_id()
+            for i in range(name_attempts):
+                ran_hash = generate_short_id()
 
-                    project_name = "%s~%s" % (project_name, ran_hash)
-                    project = id_manager.find_project(
-                        project_name, self.domain_id)
-                    if project:
-                        self.add_note(
-                            "Existing project with name '%s'." % project_name)
-                        continue
-
-                    self.project_name = project_name
-                    self.set_cache('project_name', project_name)
+                project_name = "%s~%s" % (project_name, ran_hash)
+                project = id_manager.find_project(
+                    project_name, self.domain_id)
+                if project:
                     self.add_note(
-                        "No existing project with name '%s'." % project_name)
-                    found_new_name = True
-                    break
+                        "Existing project with name '%s'." % project_name)
+                    continue
 
-                if not found_new_name:
-                    return False
-            else:
                 self.project_name = project_name
                 self.set_cache('project_name', project_name)
                 self.add_note(
                     "No existing project with name '%s'." % project_name)
+                found_new_name = True
+                break
+
+            return found_new_name
+        else:
+            self.project_name = project_name
+            self.set_cache('project_name', project_name)
+            self.add_note(
+                "No existing project with name '%s'." % project_name)
+            return True
+
+    def _validate_project_absent(self):
+        project_name = self.get_cache('project_name')
+        if not project_name:
+            return self._make_safe_project_name()
+        else:
+            original_name = project_name.split("~")[0]
+            if not original_name == self.action.task.cache.get('project_name'):
+                return self._make_safe_project_name()
 
         self.project_name = project_name
         return True

@@ -16,7 +16,8 @@ import mock
 from unittest import skip
 
 from odoo_actions.models import (
-    NewClientSignUpAction, NewProjectSignUpAction)
+    NewClientSignUpAction, NewProjectSignUpAction,
+    DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
 from adjutant.api.models import Task
 from adjutant.common.tests import fake_clients
 from adjutant.common.tests.utils import (
@@ -102,7 +103,6 @@ class SignupActionTests(AdjutantTestCase):
         self.assertEquals(partners[0].name, data['company_name'])
         self.assertEquals(partners[0].property_account_position, None)
 
-        odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
             ('name', '=', data['name'])
@@ -110,6 +110,13 @@ class SignupActionTests(AdjutantTestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, data['name'])
+
+        search = [
+            ('is_company', '=', False),
+            ('name', '=', DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 0)
 
         action.submit({})
         self.assertEquals(action.valid, True)
@@ -119,7 +126,7 @@ class SignupActionTests(AdjutantTestCase):
         Test the second default case, all valid.
         No existing customer. Primary is not billing.
 
-        Should create 3 partners.
+        Should create 4 partners.
 
         Billing address is in AU so fiscal position should be set.
         """
@@ -161,7 +168,7 @@ class SignupActionTests(AdjutantTestCase):
 
         action.post_approve()
         self.assertEquals(action.valid, True)
-        self.assertEquals(len(odoo_cache['partners']), 3)
+        self.assertEquals(len(odoo_cache['partners']), 4)
 
         odooclient = get_odoo_client()
         search = [
@@ -173,7 +180,6 @@ class SignupActionTests(AdjutantTestCase):
         self.assertEquals(partners[0].name, data['company_name'])
         self.assertEquals(partners[0].property_account_position, 1)
 
-        odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
             ('name', '=', data['name'])
@@ -182,7 +188,6 @@ class SignupActionTests(AdjutantTestCase):
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, data['name'])
 
-        odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
             ('name', '=', data['bill_name'])
@@ -190,6 +195,15 @@ class SignupActionTests(AdjutantTestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, data['bill_name'])
+
+        search = [
+            ('is_company', '=', False),
+            ('name', '=', DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 1)
+        self.assertEquals(
+            partners[0].name, DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
 
         action.submit({})
         self.assertEquals(action.valid, True)
@@ -257,7 +271,6 @@ class SignupActionTests(AdjutantTestCase):
             '(POSSIBLE DUPLICATE)' in partners[0].name or
             '(POSSIBLE DUPLICATE)' in partners[1].name)
 
-        odooclient = get_odoo_client()
         search = [
             ('is_company', '=', False),
             ('name', '=', data['name'])
@@ -266,6 +279,13 @@ class SignupActionTests(AdjutantTestCase):
         self.assertEquals(len(partners), 2)
         self.assertEquals(partners[0].name, data['name'])
         self.assertEquals(partners[1].name, data['name'])
+
+        search = [
+            ('is_company', '=', False),
+            ('name', '=', DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 0)
 
         action.submit({})
         self.assertEquals(action.valid, True)
