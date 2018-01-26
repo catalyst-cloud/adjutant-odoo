@@ -571,7 +571,7 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
             return self._make_safe_project_name()
         else:
             original_name = project_name.split("~")[0]
-            if not original_name == self.action.task.cache.get('project_name'):
+            if original_name != self.action.task.cache.get('project_name'):
                 return self._make_safe_project_name()
 
         self.project_name = project_name
