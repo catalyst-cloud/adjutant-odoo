@@ -49,12 +49,17 @@ You will also need to add some taskview settings for the new signups view:
                 non_fiscal_position_countries:
                     - NZ
                 fiscal_position_id: 1
+                individual_tag_id: 2
             NewProjectSignUpAction:
                 default_roles:
                     - project_admin
                     - project_mod
                     - heat_stack_owner
                     - _member_
+                initial_credit_amount: 300.00
+                credit_duration: 365
+                credit_type_id: 1
+                credit_code: initial_credit
         default_region: RegionOne
         # If 'None' (null in yaml), will default to domain as parent.
         # If domain isn't set explicity, will use Adjutant's admin user domain.

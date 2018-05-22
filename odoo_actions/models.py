@@ -12,6 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from datetime import timedelta
+
+from django.utils import timezone
 from django.utils.text import slugify
 
 from odoo_actions.odoo_client import get_odoo_client
@@ -43,6 +46,7 @@ class NewClientSignUpAction(BaseAction):
         'discount_code',
         'payment_method',
         'stripe_token',
+        'news_agreed',
         'toc_agreed',
     ]
 
@@ -70,6 +74,7 @@ class NewClientSignUpAction(BaseAction):
         'bill_postal_code',
         'bill_country',
         'discount_code',
+        'news_agreed',
         'toc_agreed',
     ]
 
@@ -91,6 +96,10 @@ class NewClientSignUpAction(BaseAction):
         self.cloud_tag_id = self.settings.get("cloud_tag_id", None)
         if self.cloud_tag_id:
             self.cloud_tag_id = int(self.cloud_tag_id)
+
+        self.individual_tag_id = self.settings.get("individual_tag_id", None)
+        if self.individual_tag_id:
+            self.individual_tag_id = int(self.individual_tag_id)
 
         self.non_fiscal_position_countries = self.settings.get(
             "non_fiscal_position_countries", ['NZ'])
@@ -263,9 +272,7 @@ class NewClientSignUpAction(BaseAction):
     def _validate_individual(self):
         odoo_client = get_odoo_client()
 
-        customers = odoo_client.partners.fuzzy_match(
-            name=self.name,
-            check_parent=True)
+        customers = odoo_client.partners.fuzzy_match(name=self.name)
         if len(customers) > 0:
             for customer in customers:
                 if customer['match'] == 1:
@@ -345,6 +352,7 @@ class NewClientSignUpAction(BaseAction):
         if self.signup_type == "organisation":
             if self.payment_method == "credit_card":
                 # TODO(adriant): check credit card details.
+                self.add_note("Credit cards unsupported.")
                 return False
             else:
                 # Nothing to check with invoices
@@ -352,10 +360,11 @@ class NewClientSignUpAction(BaseAction):
         elif self.signup_type == "individual":
             if self.payment_method == "credit_card":
                 # TODO(adriant): check credit card details.
+                self.add_note("Credit cards unsupported.")
                 return False
             else:
                 # Nothing to check with invoices
-                return False
+                return True
 
     def _create_organisation(self):
         odoo_client = get_odoo_client()
@@ -372,6 +381,7 @@ class NewClientSignUpAction(BaseAction):
                 # and flag customer with credit payment type
                 partner_dict = {
                     'is_company': True,
+                    'opt_out': True,
                     'name': self.odoo_company_name,
                 }
                 if self.primary_contact_is_billing:
@@ -415,6 +425,7 @@ class NewClientSignUpAction(BaseAction):
                 try:
                     physical_address_id = odoo_client.partners.create(
                         is_company=False,
+                        opt_out=True,
                         name=self.physical_address_contact_name,
                         street=self.address_1,
                         street2=self.address_2,
@@ -438,7 +449,8 @@ class NewClientSignUpAction(BaseAction):
         else:
             try:
                 primary_id = odoo_client.partners.create(
-                    is_company=False, name=self.name,
+                    is_company=False, opt_out=(not self.news_agreed),
+                    name=self.name,
                     email=self.email, phone=self.phone,
                     parent_id=partner_id,
                     use_parent_address=True)
@@ -459,7 +471,7 @@ class NewClientSignUpAction(BaseAction):
         elif not self.primary_contact_is_billing:
             try:
                 billing_id = odoo_client.partners.create(
-                    is_company=False, name=self.bill_name,
+                    is_company=False, opt_out=True, name=self.bill_name,
                     email=self.bill_email, parent_id=partner_id)
             except Exception as e:
                 self.add_note(
@@ -481,7 +493,8 @@ class NewClientSignUpAction(BaseAction):
                 # TODO(adriant): store credit card somewhere
                 # and flag customer with credit payment type
                 partner_dict = {
-                    'is_company': False,
+                    'is_company': True,
+                    'opt_out': True,
                     'name': self.customer_name,
                     'email': self.email,
                     'phone': self.phone,
@@ -491,9 +504,15 @@ class NewClientSignUpAction(BaseAction):
                     'zip': self.bill_postal_code,
                     'country_id': self.bill_country_id,
                 }
+
+                tags = []
                 if self.cloud_tag_id:
-                    partner_dict['category_id'] = \
-                        [(6, 0, [self.cloud_tag_id])]
+                    tags.append(self.cloud_tag_id)
+                if self.individual_tag_id:
+                    tags.append(self.individual_tag_id)
+                if tags:
+                    partner_dict['category_id'] = [(6, 0, tags)]
+
                 if self.set_fiscal_position:
                     partner_dict['property_account_position'] = \
                         self.fiscal_position_id
@@ -505,6 +524,27 @@ class NewClientSignUpAction(BaseAction):
             self.set_cache('partner_id', partner_id)
             self.add_note("Partner '%s' created." % self.customer_name)
         self.action.task.cache['partner_id'] = partner_id
+
+        # Now we handle the primary contact for the new project:
+        primary_id = self.get_cache('primary_id')
+        if primary_id:
+            self.add_note("Primary contact already created.")
+        else:
+            try:
+                primary_id = odoo_client.partners.create(
+                    is_company=False, opt_out=(not self.news_agreed),
+                    name=self.name,
+                    email=self.email, phone=self.phone,
+                    parent_id=partner_id,
+                    use_parent_address=True)
+            except Exception as e:
+                self.add_note(
+                    "Error: '%s' while setting up "
+                    "primary contact in Odoo." % e)
+                raise
+            self.set_cache('primary_id', primary_id)
+            self.add_note("Primary contact '%s' created." % self.name)
+        self.action.task.cache['primary_id'] = primary_id
 
 
 class NewProjectSignUpAction(NewProjectWithUserAction):
@@ -583,9 +623,11 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
 
         odoo_project_id = self.get_cache('odoo_project_id')
         contacts_linked = self.get_cache('contacts_linked')
+        credit_id = self.get_cache('credit_id')
 
-        if odoo_project_id and contacts_linked:
-            self.add_note("Project and contacts already linked in Odoo.")
+        if odoo_project_id and contacts_linked and credit_id:
+            self.add_note("All done. Project and contacts linked, and credit "
+                          "created.")
             return
 
         # now that the project exists we get its id
@@ -630,6 +672,9 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
                     (e, project_id))
                 raise
 
+        if not credit_id:
+            self._create_initial_credit()
+
     def _create_odoo_project(self, project_id):
         odoo_client = get_odoo_client()
 
@@ -652,7 +697,6 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
 
     def _link_organisation_contacts(self):
         partner_id = self.action.task.cache.get('partner_id')
-        primary_id = self.action.task.cache.get('primary_id')
         odoo_project_id = self.get_cache('odoo_project_id')
         odoo_client = get_odoo_client()
 
@@ -663,6 +707,8 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
                 partner_id=partner_id,
                 contact_type="owner")
             self.set_cache('owner_rel', owner_rel)
+
+        primary_id = self.action.task.cache.get('primary_id')
 
         primary_rel = self.get_cache('primary_rel')
         if not primary_rel:
@@ -695,13 +741,51 @@ class NewProjectSignUpAction(NewProjectWithUserAction):
                 contact_type="owner")
             self.set_cache('owner_rel', owner_rel)
 
+        primary_id = self.action.task.cache.get('primary_id')
+
         primary_rel = self.get_cache('primary_rel')
         if not primary_rel:
             primary_rel = odoo_client.project_relationships.create(
                 cloud_tenant=odoo_project_id,
-                partner_id=partner_id,
+                partner_id=primary_id,
                 contact_type="primary")
             self.set_cache('primary_rel', primary_rel)
+
+        billing_rel = self.get_cache('billing_rel')
+        if primary_id and not billing_rel:
+            billing_rel = odoo_client.project_relationships.create(
+                cloud_tenant=odoo_project_id,
+                partner_id=primary_id,
+                contact_type="billing")
+            self.set_cache('billing_rel', billing_rel)
+
+    def _create_initial_credit(self):
+        # floating point dollar amount
+        credit_amount = float(self.settings.get(
+            'initial_credit_amount', 0))
+        # in days
+        credit_duration = int(self.settings.get('credit_duration', 0))
+        if credit_amount > 0 and credit_duration > 0:
+            odoo_project_id = self.get_cache('odoo_project_id')
+            # id in odoo, default is 'Cloud Trial Credit '
+            credit_type_id = int(self.settings.get('credit_type_id', 1))
+            credit_code = self.settings.get(
+                'credit_code', 'initial_credit')
+
+            now = timezone.now()
+            expiry_date = now + timedelta(days=credit_duration)
+
+            odoo_client = get_odoo_client()
+            credit_id = odoo_client.credits.create(
+                cloud_tenant=odoo_project_id,
+                code=credit_code,
+                credit_type_id=credit_type_id,
+                initial_balance=credit_amount,
+                current_balance=credit_amount,
+                start_date=now.isoformat(),
+                expiry_date=expiry_date.isoformat(),
+            )
+            self.set_cache('credit_id', credit_id)
 
 
 register_action_class(NewClientSignUpAction, NewClientSignUpActionSerializer)

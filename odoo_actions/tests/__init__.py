@@ -160,6 +160,7 @@ class FakeOdooClient(object):
         self.partners = FakePartnerManager("partners")
         self.project_relationships = FakeOdooResourceManager("project_rels")
         self.countries = FakeCountryManager("countries")
+        self.credits = FakeCountryManager("credits")
         self.tags = FakeOdooResourceManager("tags")
         self._odoo = MagicMock()
 
@@ -177,9 +178,10 @@ def setup_odoo_cache():
             3: {'code': 'NZ', 'id': 3},
             4: {'code': 'AU', 'id': 4}
         },
+        'credits': {},
         'tags': {
             1: {'name': 'cloud tag', 'id': 1},
-        }
+        },
     })
 
 

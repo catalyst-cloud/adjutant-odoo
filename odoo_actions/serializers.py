@@ -28,11 +28,14 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=100)
+    news_agreed = serializers.BooleanField(default=False)
     toc_agreed = serializers.BooleanField()
     discount_code = serializers.CharField(
         max_length=100, default="", allow_blank=True)
+
+    # Change to credit_card as default with credit support
     payment_method = serializers.ChoiceField(
-        choices=['invoice', 'credit_card'], default='credit_card')
+        choices=['invoice', 'credit_card'], default='invoice')
     stripe_token = serializers.CharField(
         max_length=100, default="", allow_blank=True)
 
@@ -125,13 +128,17 @@ class NewClientSignUpActionSerializer(serializers.Serializer):
         else:
             missing_fields = []
 
-            if data.get('payment_method') != 'credit_card':
-                raise serializers.ValidationError(
-                    "Indidividuals can only pay by credit card.")
+            # Uncomment with credit support
+            # if data.get('payment_method') != 'credit_card':
+            #     raise serializers.ValidationError(
+            #         "Indidividuals can only pay by credit card.")
+            # if not data.get('stripe_token'):
+            #     raise serializers.ValidationError(
+            #         "Must provide a stripe token.")
 
-            if not data.get('stripe_token'):
-                raise serializers.ValidationError(
-                    "Must provide a stripe token.")
+            # Remove with credit support
+            payment_method = self._check_field(
+                missing_fields, 'payment_method', data)
 
             self._check_field(
                 missing_fields, 'bill_address_1', data)

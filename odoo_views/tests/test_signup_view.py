@@ -20,7 +20,8 @@ from adjutant.api.models import Task, Token
 from adjutant.common.tests import fake_clients
 from adjutant.common.tests.fake_clients import (
     FakeManager, setup_identity_cache)
-from adjutant.common.tests.utils import AdjutantAPITestCase
+from adjutant.common.tests.utils import (
+    AdjutantAPITestCase, modify_dict_settings)
 
 from odoo_actions.models import DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME
 from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
@@ -28,6 +29,15 @@ from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
 @mock.patch('adjutant.common.user_store.IdentityManager', FakeManager)
 @mock.patch('odoo_actions.models.get_odoo_client', get_odoo_client)
+@modify_dict_settings(
+    DEFAULT_ACTION_SETTINGS={
+        'key_list': ['NewProjectSignUpAction'],
+        'operation': 'override',
+        'value': {
+            'credit_duration': 365,
+            'initial_credit_amount': 300.00
+         }
+    })
 class SignupViewTests(AdjutantAPITestCase):
 
     def setUp(self):
@@ -104,6 +114,10 @@ class SignupViewTests(AdjutantAPITestCase):
 
         self.assertEquals(len(odoo_cache['projects']), 1)
         self.assertEquals(len(odoo_cache['project_rels']), 3)
+        self.assertEquals(len(odoo_cache['credits']), 1)
+
+        self.assertEquals(
+            list(odoo_cache['credits'].values())[0]['current_balance'], 300.00)
 
         new_token = Token.objects.all()[0]
         url = "/v1/tokens/" + new_token.token
@@ -186,6 +200,10 @@ class SignupViewTests(AdjutantAPITestCase):
 
         self.assertEquals(len(odoo_cache['projects']), 1)
         self.assertEquals(len(odoo_cache['project_rels']), 3)
+        self.assertEquals(len(odoo_cache['credits']), 1)
+
+        self.assertEquals(
+            list(odoo_cache['credits'].values())[0]['current_balance'], 300.00)
 
         self.assertEquals(
             len(fake_clients.identity_cache['new_projects']), 1)
