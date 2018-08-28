@@ -23,12 +23,12 @@ from adjutant.common.tests.fake_clients import (
 from adjutant.common.tests.utils import (
     AdjutantAPITestCase, modify_dict_settings)
 
-from odoo_actions.models import DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME
+from odoo_actions.signup import DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME
 from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
 
 @mock.patch('adjutant.common.user_store.IdentityManager', FakeManager)
-@mock.patch('odoo_actions.models.get_odoo_client', get_odoo_client)
+@mock.patch('odoo_actions.signup.get_odoo_client', get_odoo_client)
 @modify_dict_settings(
     DEFAULT_ACTION_SETTINGS={
         'key_list': ['NewProjectSignUpAction'],
