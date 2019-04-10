@@ -22,10 +22,16 @@ or
 After installation is complete add `odoo_actions` and `odoo_views` to your
 ADDITIONAL_APPS in the Adjutant conf.
 
+
 You can then use the Odoo actions as part of your Adjutant workflows, and
 setup the Odoo views from this package in your ACTIVE_TASKVIEWS. For example
 to introduce signups backed to Odoo you'd replace your other signup view in
 ACTIVE_TASKVIEWS with `OpenStackSignUp`.
+
+Adding Odoo to the Sign up workflow
+------------------------------------
+
+Replace the signup view in ACTIVE_TASKVIEWS with `OpenStackSignUp`.
 
 You will also need to add some taskview settings for the new signups view:
 
@@ -43,13 +49,6 @@ You will also need to add some taskview settings for the new signups view:
                 EmailNotification:
                     emails:
                         - signups@example.com
-        action_settings:
-            NewClientSignUpAction:
-                cloud_tag_id: 1
-                non_fiscal_position_countries:
-                    - NZ
-                fiscal_position_id: 1
-                individual_tag_id: 2
             NewProjectSignUpAction:
                 default_roles:
                     - project_admin
@@ -68,6 +67,8 @@ You will also need to add some taskview settings for the new signups view:
         setup_network: True
 
 
+Additionally add the taskviews to the active taskviews.
+
 Once active, and if debug is turned on, you can see the endpoint and test it
 with the browsable django-rest-framework api.
 
@@ -77,8 +78,8 @@ You will also need to add 'adjutant-odoo' plugin settings:
 
     PLUGIN_SETTINGS:
         adjutant-odoo:
-            odoorpc:
-                odoo:
+            odoo_client:
+                odoorpc:
                     hostname: <odoo_hostname>
                     protocol: jsonrpc+ssl
                     port: 443
@@ -86,3 +87,21 @@ You will also need to add 'adjutant-odoo' plugin settings:
                     database: <odoo_db_name>
                     user: <odoo_username
                     password: <odoo_password>
+            non_fiscal_position_countries:
+                - NZ
+            fiscal_position_id: 1
+            physical_address_contact_name: Physical Address
+            cloud_tag_id: 1
+            individual_tag_id: 2
+
+
+Adding Details and Payment Management Actions
+-----------------------------------------
+
+To ACTIVE_TASKVIEWS add this list::
+      - AccountDetailsManagement
+
+You will also want to configure all these tasks to cancel duplicates::
+
+    update_account_details:
+        duplicate_policy: cancel

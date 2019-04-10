@@ -15,9 +15,6 @@
 import mock
 from unittest import skip
 
-from odoo_actions.signup import (
-    NewClientSignUpAction, NewProjectSignUpAction,
-    DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME)
 from adjutant.api.models import Task
 from adjutant.common.tests import fake_clients
 from adjutant.common.tests.utils import (
@@ -25,20 +22,23 @@ from adjutant.common.tests.utils import (
 from adjutant.common.tests.fake_clients import (
     FakeManager, setup_identity_cache)
 
-from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
+from django.test import override_settings
+
+from odoo_actions.tests import (
+    odoo_cache, get_odoo_client, setup_odoo_cache, INDIVIDUAL_TAG_ID)
+from odoo_actions.signup import (
+    NewClientSignUpAction, NewProjectSignUpAction)
+from odoo_actions.odoo_client import DEFAULT_PHYSICAL_ADDRESS_CONTACT_NAME
 
 
-@mock.patch('odoo_actions.signup.get_odoo_client', get_odoo_client)
-@modify_dict_settings(
-    DEFAULT_ACTION_SETTINGS={
-        'key_list': ['NewClientSignUpAction'],
-        'operation': 'override',
-        'value': {
-            'cloud_tag_id': 1,
-            'non_fiscal_position_countries': ['NZ'],
-            'fiscal_position_id': 1,
-         }
-    })
+@mock.patch('odoo_actions.odoo_client.get_odoo_client', get_odoo_client)
+@override_settings(PLUGIN_SETTINGS={'adjutant-odoo': {
+    'fiscal_position_id': 1,
+    'cloud_tag_id': 1,
+    'non_fiscal_position_countries': ['NZ'],
+    'physical_address_contact_name': 'Physical Address',
+    'individual_tag_id': INDIVIDUAL_TAG_ID,
+    }})
 class SignupActionTests(AdjutantTestCase):
 
     def setUp(self):
@@ -403,7 +403,7 @@ class SignupActionTests(AdjutantTestCase):
 
 
 @mock.patch('adjutant.common.user_store.IdentityManager', FakeManager)
-@mock.patch('odoo_actions.signup.get_odoo_client', get_odoo_client)
+@mock.patch('odoo_actions.odoo_client.get_odoo_client', get_odoo_client)
 @modify_dict_settings(
     DEFAULT_ACTION_SETTINGS={
         'key_list': ['NewProjectSignUpAction'],
@@ -415,7 +415,7 @@ class SignupActionTests(AdjutantTestCase):
                 "heat_stack_owner",
                 "_member_",
             ]
-         }
+        }
     })
 class NewProjectSignUpActionTests(AdjutantTestCase):
 

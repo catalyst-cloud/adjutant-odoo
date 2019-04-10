@@ -17,6 +17,12 @@ from .common import BaseManager
 
 class CountryManager(BaseManager):
 
+    fields = [
+        'id',
+        'name',
+        'code',
+    ]
+
     def __init__(self, odooclient):
         self.client = odooclient
         self.resource_env = self.client._Country
