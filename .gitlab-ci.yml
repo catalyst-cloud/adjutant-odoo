@@ -1,0 +1,9 @@
+image: gitlab.int.catalystcloud.nz:4567/catalystcloud/tox-container:latest
+
+stages:
+  - test
+
+test:
+  stage: test
+  script:
+    - tox

@@ -166,3 +166,14 @@ class NewProjectSignUpActionSerializer(BaseUserNameSerializer):
         max_length=64, default=None, allow_null=True, allow_blank=True)
     signup_type = serializers.ChoiceField(
         choices=['individual', 'organisation'])
+
+
+class UpdateAccountDetailsActionSerializer(serializers.Serializer):
+    project_id = serializers.CharField(max_length=64)
+    name = address_1 = serializers.CharField(max_length=200)
+    address_1 = serializers.CharField(max_length=200)
+    address_2 = serializers.CharField(
+        max_length=200, default="", allow_blank=True)
+    city = serializers.CharField(max_length=100)
+    postal_code = serializers.CharField(max_length=100)
+    country = serializers.ChoiceField(choices=countries)

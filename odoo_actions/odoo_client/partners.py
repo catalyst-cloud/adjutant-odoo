@@ -17,6 +17,19 @@ from .common import BaseManager
 
 class PartnerManager(BaseManager):
 
+    fields = [
+        'id',
+        'name',
+        'category_id',
+        'email',
+        'phone',
+        'street',
+        'street2',
+        'zip',
+        'city',
+        'country_id'
+    ]
+
     def __init__(self, odooclient):
         self.client = odooclient
         self.resource_env = self.client._Partner
@@ -54,3 +67,19 @@ class PartnerManager(BaseManager):
             })
 
         return matches
+
+    def add_internal_note(self, partner_id, message_body, **kwargs):
+        """Set a note on the given partner"""
+
+        if type(partner_id) != int:
+            partner_id = partner_id.id
+
+        body = {
+            'body': message_body,
+            'res_id': partner_id,
+            'partner_ids': [],
+            'model': 'res.partner',
+            'type': 'comment',
+        }
+        body.update(kwargs)
+        self.client._MailMessage.create(body)

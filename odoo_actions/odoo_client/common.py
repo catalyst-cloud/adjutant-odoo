@@ -1,17 +1,21 @@
+from collections import Iterable
+
 
 class BaseManager(object):
 
     # you must initialise self.resource_env in __init__
 
+    fields = None
+
     class Meta:
         abstract = True
 
-    def _list_or_tuple(self, ids):
-        if not isinstance(ids, list) or isinstance(ids, tuple):
+    def _is_iterable(self, ids):
+        if isinstance(ids, str) or not isinstance(ids, Iterable):
             ids = [ids, ]
         return ids
 
-    def get(self, ids):
+    def get(self, ids, read=False):
         """Get one or more Resources by id.
 
         'ids' can be 1 id, or a list of ids.
@@ -24,16 +28,22 @@ class BaseManager(object):
         Always returns a list even when 1 id is given.
         This is done for consistency.
         """
-        return self.resource_env.browse(self._list_or_tuple(ids))
+        if read:
+            return self.resource_env.read(
+                self._is_iterable(ids), fields=self.fields)
+        return self.resource_env.browse(self._is_iterable(ids))
 
-    def list(self, filters):
+    def list(self, filters, get=True, read=False):
         """Get a list of Resources.
 
         'filters' is a list of search options.`
             [('field', '=', value), ]
         """
         ids = self.resource_env.search(filters)
-        return self.get(ids)
+        if get:
+            return self.get(ids, read)
+        else:
+            return ids
 
     def create(self, **fields):
         """Create a Resource.
@@ -49,7 +59,7 @@ class BaseManager(object):
         'fields' is a list of fields to import. - list(str)
         'rows' is the item data. - list(list(str))
         """
-        return self.resource_env.create(fields)
+        return self.resource_env.load(fields=fields, data=rows)
 
     def delete(self, ids):
         """Delete 1 or more Resources by id.
@@ -63,4 +73,4 @@ class BaseManager(object):
 
         returns True if deleted or not present.
         """
-        return self.resource_env.unlink(self._list_or_tuple(ids))
+        return self.resource_env.unlink(self._is_iterable(ids))

@@ -15,9 +15,14 @@
 from adjutant.actions.v1.models import register_action_class
 
 from odoo_actions.signup import NewClientSignUpAction, NewProjectSignUpAction
-from odoo_actions.serializers import (
-    NewClientSignUpActionSerializer, NewProjectSignUpActionSerializer)
+from odoo_actions import serializers
+from odoo_actions import account
 
 
-register_action_class(NewClientSignUpAction, NewClientSignUpActionSerializer)
-register_action_class(NewProjectSignUpAction, NewProjectSignUpActionSerializer)
+register_action_class(
+    NewClientSignUpAction, serializers.NewClientSignUpActionSerializer)
+register_action_class(
+    NewProjectSignUpAction, serializers.NewProjectSignUpActionSerializer)
+register_action_class(
+    account.UpdateAccountDetailsAction,
+    serializers.UpdateAccountDetailsActionSerializer)

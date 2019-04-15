@@ -28,7 +28,7 @@ from odoo_actions.tests import odoo_cache, get_odoo_client, setup_odoo_cache
 
 
 @mock.patch('adjutant.common.user_store.IdentityManager', FakeManager)
-@mock.patch('odoo_actions.signup.get_odoo_client', get_odoo_client)
+@mock.patch('odoo_actions.odoo_client.get_odoo_client', get_odoo_client)
 @modify_dict_settings(
     DEFAULT_ACTION_SETTINGS={
         'key_list': ['NewProjectSignUpAction'],
@@ -96,6 +96,7 @@ class SignupViewTests(AdjutantAPITestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['company_name'])
+        company_partner = partners[0]
 
         search = [
             ('is_company', '=', False),
@@ -104,6 +105,7 @@ class SignupViewTests(AdjutantAPITestCase):
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, signup_data['name'])
+        self.assertEquals(partners[0].parent_id, company_partner.id)
 
         search = [
             ('is_company', '=', False),

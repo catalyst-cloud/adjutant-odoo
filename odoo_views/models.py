@@ -18,3 +18,6 @@ from adjutant.api.v1.models import register_taskview_class
 from odoo_views import views
 
 register_taskview_class(r'^openstack/sign-up/?$', views.OpenStackSignUp)
+
+register_taskview_class(
+    r'^billing/account_details/?$', views.AccountDetailsManagement)
