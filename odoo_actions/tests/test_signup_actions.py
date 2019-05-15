@@ -13,7 +13,6 @@
 #    under the License.
 
 import mock
-from unittest import skip
 
 from adjutant.api.models import Task
 from adjutant.common.tests import fake_clients
@@ -293,13 +292,12 @@ class SignupActionTests(AdjutantTestCase):
         action.submit({})
         self.assertEquals(action.valid, True)
 
-    @skip("Not applicable yet.")
     def test_new_customer_individual(self):
         """
         Test individual.
         No existing customer.
 
-        Should create 1 partner.
+        Should create 2 partners.
 
         Fiscal position is not set because in NZ.
         """
@@ -312,8 +310,8 @@ class SignupActionTests(AdjutantTestCase):
             'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
-            'payment_method': 'credit_card',
-            'stripe_token': 'some_credit_token',
+            'payment_method': 'invoice',
+            'stripe_token': '',
             'toc_agreed': 'true',
             'news_agreed': 'true',
             'bill_address_1': 'yellow brick road',
@@ -331,29 +329,88 @@ class SignupActionTests(AdjutantTestCase):
 
         action.post_approve()
         self.assertEquals(action.valid, True)
-        self.assertEquals(len(odoo_cache['partners']), 1)
+        self.assertEquals(len(odoo_cache['partners']), 2)
 
         odooclient = get_odoo_client()
         search = [
-            ('is_company', '=', False),
+            ('is_company', '=', True),
             ('name', '=', data['name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, data['name'])
-        self.assertEquals(partners[0].country_id, 3)
+        self.assertEquals(partners[0].country_id.id, 3)
         self.assertEquals(partners[0].property_account_position, None)
 
         action.submit({})
         self.assertEquals(action.valid, True)
 
-    @skip("Not applicable yet.")
+    def test_new_customer_individual_false_duplicate(self):
+        """
+        Test individual.
+        Existing customer with 'contact' that matches name.
+
+        Should not flag non_company contact as a possible match.
+
+        Should create 2 partner.
+        """
+
+        odooclient = get_odoo_client()
+        existing_company_id = odooclient.partners.create(
+            name="test company", is_company=True)
+        odooclient.partners.create(
+            name="jim james", parent_id=existing_company_id)
+
+        task = Task.objects.create(
+            ip_address="0.0.0.0",
+            keystone_user={})
+
+        data = {
+            'signup_type': 'individual',
+            'name': 'jim james',
+            'email': 'jim@jim.jim',
+            'phone': '123456',
+            'payment_method': 'invoice',
+            'stripe_token': '',
+            'toc_agreed': 'true',
+            'news_agreed': 'true',
+            'bill_address_1': 'yellow brick road',
+            'bill_address_2': '',
+            'bill_city': 'emerald city',
+            'bill_postal_code': 'NW1',
+            'bill_country': 'NZ',
+            'discount_code': '',
+        }
+
+        action = NewClientSignUpAction(data, task=task, order=1)
+
+        action.pre_approve()
+        self.assertEquals(action.valid, True)
+        self.assertNotIn("(POSSIBLE DUPLICATE)", action.customer_name)
+
+        action.post_approve()
+        self.assertEquals(action.valid, True)
+        self.assertEquals(len(odoo_cache['partners']), 4)
+
+        search = [
+            ('is_company', '=', True),
+            ('name', '=', data['name'])
+        ]
+        partners = odooclient.partners.list(search)
+        self.assertEquals(len(partners), 1)
+        self.assertEquals(partners[0].name, data['name'])
+        self.assertEquals(partners[0].country_id.id, 3)
+        self.assertEquals(partners[0].property_account_position, None)
+
+        action.submit({})
+        self.assertEquals(action.valid, True)
+
     def test_new_customer_individual_fiscal_position(self):
         """
         Test individual.
         No existing customer.
 
-        Should create 1 partner.
+        Should create 2 partners.
 
         Fiscal position is set because not in NZ.
         """
@@ -366,8 +423,8 @@ class SignupActionTests(AdjutantTestCase):
             'name': 'jim james',
             'email': 'jim@jim.jim',
             'phone': '123456',
-            'payment_method': 'credit_card',
-            'stripe_token': 'some_credit_token',
+            'payment_method': 'invoice',
+            'stripe_token': '',
             'toc_agreed': 'true',
             'news_agreed': 'true',
             'bill_address_1': 'yellow brick road',
@@ -385,17 +442,17 @@ class SignupActionTests(AdjutantTestCase):
 
         action.post_approve()
         self.assertEquals(action.valid, True)
-        self.assertEquals(len(odoo_cache['partners']), 1)
+        self.assertEquals(len(odoo_cache['partners']), 2)
 
         odooclient = get_odoo_client()
         search = [
-            ('is_company', '=', False),
+            ('is_company', '=', True),
             ('name', '=', data['name'])
         ]
         partners = odooclient.partners.list(search)
         self.assertEquals(len(partners), 1)
         self.assertEquals(partners[0].name, data['name'])
-        self.assertEquals(partners[0].country_id, 4)
+        self.assertEquals(partners[0].country_id.id, 4)
         self.assertEquals(partners[0].property_account_position, 1)
 
         action.submit({})
