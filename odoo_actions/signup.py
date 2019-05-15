@@ -272,7 +272,8 @@ class NewClientSignUpAction(BaseAction):
     def _validate_individual(self):
         odooclient = odoo_client.get_odoo_client()
 
-        customers = odooclient.partners.fuzzy_match(name=self.name)
+        customers = odooclient.partners.fuzzy_match(
+            name=self.name, is_company=True)
         if len(customers) > 0:
             for customer in customers:
                 if customer['match'] == 1:
